@@ -1,0 +1,4834 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我都OK啊-進階抽獎程式 v7 (精靈模式)</title>
+    <!-- ========================================================= -->
+    <!-- ⬇⬇⬇ 請在此輸入您的 YOUTUBE DATA API KEY ⬇⬇⬇ -->
+    <!-- ========================================================= -->
+    <script>
+        // ============================================================
+        // 🔧 使用者設定區 - 您可在此預先填入您的設定
+        // ============================================================
+        const USER_CONFIG = {
+            // YouTube Data API 金鑰（轉換 Handle 與抓取留言時需要）
+            YOUTUBE_API_KEY: '', // <---- 替換這裡的雙引號內容
+
+            // OAuth Client ID (抓日付費會員時所需)
+            CLIENT_ID: '',
+            SCOPES: 'https://www.googleapis.com/auth/youtube.channel-memberships.creator https://www.googleapis.com/auth/youtube.readonly',
+
+            // 預設的 Invidious 伺服器（如有自架留言抓取輔助）
+            INVIDIOUS_SERVER: ''
+        };
+        // ============================================================
+    </script>
+    <!-- ========================================================= -->
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* 典雅現代簡潔風 配色方案定義 */
+        :root {
+            --bg-base: #F5F5F7;
+            --bg-highlight: #FFFFFF;
+            --fg-base: #555555;
+            --fg-emphasis: #1D1D1F;
+            --primary: #5A5A60;
+            /* 質感銀灰的重點色 */
+            --secondary: #8A8D91;
+            --accent: #007AFF;
+            /* 互動重點的藍色 */
+            --green: #34C759;
+            --red: #FF3B30;
+            --orange: #FF9500;
+            --yellow: #FFCC00;
+            --blue: #007AFF;
+            --cyan: #32ADE6;
+            --magenta: #AF52DE;
+            --violet: #5856D6;
+            --gradient-start: #E5E5EA;
+            /* 背景漸層起點，淡灰 */
+            --gradient-end: #D1D1D6;
+            /* 背景漸層終點 */
+            --result-gradient-start: #D4AF37;
+            /* 香檳金 */
+            --result-gradient-end: #F9F1D8;
+            --glass-bg: rgba(255, 255, 255, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.4);
+            --shadow-color: rgba(0, 0, 0, 0.1);
+        }
+
+        [data-theme="dark"] {
+            /* 暗黑奢華風配色 (包含 Tiffany 綠與金黃) */
+            --bg-base: #121212;
+            --bg-highlight: #1E1E1E;
+            --fg-base: #A0A0A0;
+            --fg-emphasis: #FFFFFF;
+            --primary: #0ABAB5;
+            /* Tiffany 綠主色 */
+            --secondary: #D4AF37;
+            /* 金黃色 */
+            --accent: #D4AF37;
+            --green: #0ABAB5;
+            /* Tiffany 綠替代綠色 */
+            --red: #FF453A;
+            --orange: #FF9F0A;
+            --yellow: #FFD60A;
+            --blue: #0A84FF;
+            --cyan: #64D2FF;
+            --magenta: #BF5AF2;
+            --violet: #5E5CE6;
+            --gradient-start: #0A0A0A;
+            --gradient-end: #222222;
+            --result-gradient-start: #D4AF37;
+            /* 金黃 */
+            --result-gradient-end: #0ABAB5;
+            /* Tiffany 綠 */
+            --glass-bg: rgba(30, 30, 30, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --shadow-color: rgba(0, 0, 0, 0.6);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, var(--gradient-start) 0%, var(--gradient-end) 100%);
+            min-height: 100vh;
+            padding: 20px;
+            transition: background 0.5s ease;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: var(--glass-bg);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px var(--shadow-color);
+            overflow: hidden;
+            transition: all 0.5s ease;
+        }
+
+        .header {
+            background: transparent;
+            color: var(--fg-emphasis);
+            padding: 30px 30px 20px;
+            text-align: center;
+            position: relative;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .theme-toggle {
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: rotate(20deg) scale(1.1);
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1rem;
+        }
+
+        /* 精靈步驟指示器 */
+        .wizard-steps {
+            display: flex;
+            justify-content: center;
+            padding: 25px 20px;
+            background: var(--bg-highlight);
+            gap: 0;
+            position: relative;
+        }
+
+        .wizard-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+            max-width: 140px;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .wizard-step::after {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            width: 100%;
+            height: 3px;
+            background: var(--bg-base);
+            z-index: 0;
+        }
+
+        .wizard-step:last-child::after {
+            display: none;
+        }
+
+        .wizard-step.completed::after {
+            background: var(--green);
+        }
+
+        .step-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: var(--bg-base);
+            color: var(--fg-base);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 1.1rem;
+            z-index: 1;
+            transition: all 0.3s ease;
+            border: 3px solid var(--bg-base);
+        }
+
+        .wizard-step.active .step-number {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            transform: scale(1.1);
+            box-shadow: 0 4px 15px rgba(38, 139, 210, 0.4);
+        }
+
+        .wizard-step.completed .step-number {
+            background: var(--green);
+            color: white;
+            border-color: var(--green);
+        }
+
+        .step-label {
+            margin-top: 8px;
+            font-size: 0.8rem;
+            color: var(--fg-base);
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .wizard-step.active .step-label {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .wizard-step.completed .step-label {
+            color: var(--green);
+        }
+
+        /* 步驟內容區域 */
+        .step-content {
+            display: none;
+            padding: 30px;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .privacy-blur {
+            filter: blur(6px);
+            transition: filter 0.3s ease;
+        }
+
+        .privacy-blur:focus-within {
+            filter: blur(2px);
+        }
+
+        .step-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .step-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--fg-emphasis);
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid var(--primary);
+            display: inline-block;
+        }
+
+        .step-description {
+            color: var(--fg-base);
+            margin-bottom: 25px;
+            font-size: 0.95rem;
+        }
+
+        /* 表單樣式 */
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-label {
+            display: block;
+            font-weight: 500;
+            color: var(--fg-base);
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid var(--bg-highlight);
+            background: var(--bg-base);
+            color: var(--fg-emphasis);
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: var(--bg-highlight);
+        }
+
+        .form-textarea {
+            min-height: 150px;
+            resize: vertical;
+        }
+
+        .form-textarea.blurred {
+            filter: blur(3px);
+        }
+
+        .dual-input-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            color: var(--fg-base);
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        /* 按鈕樣式 */
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, var(--blue), var(--violet));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(38, 139, 210, 0.4);
+        }
+
+        .btn-secondary {
+            background: var(--bg-highlight);
+            color: var(--fg-base);
+            border: 2px solid var(--bg-highlight);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-base);
+            border-color: var(--fg-base);
+        }
+
+        .btn-danger {
+            background: var(--red);
+            color: white;
+        }
+
+        .btn-warning {
+            background: var(--orange);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(45deg, var(--green), var(--cyan));
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(133, 153, 0, 0.4);
+        }
+
+        .btn-draw {
+            background: linear-gradient(45deg, var(--green), var(--cyan));
+            color: white;
+            font-size: 1.5rem;
+            padding: 20px 60px;
+            border-radius: 15px;
+        }
+
+        .btn-draw:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px rgba(133, 153, 0, 0.4);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        /* 導航按鈕區 */
+        .wizard-nav {
+            display: flex;
+            justify-content: space-between;
+            padding: 20px 30px;
+            border-top: 2px solid var(--bg-highlight);
+            background: var(--bg-base);
+        }
+
+        .nav-left,
+        .nav-right {
+            display: flex;
+            gap: 10px;
+        }
+
+        /* 顯示區域 */
+        .participants-display {
+            background: var(--bg-highlight);
+            padding: 20px;
+            border-radius: 10px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+
+        .participant-count {
+            color: var(--primary);
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .participants-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+
+        .participant-tag {
+            background: var(--bg-base);
+            color: var(--fg-emphasis);
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.85rem;
+            border: 1px solid var(--bg-highlight);
+        }
+
+        /* 獎項列表 */
+        .prize-item {
+            background: var(--bg-highlight);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .prize-info {
+            flex: 1;
+        }
+
+        .prize-name {
+            font-weight: 600;
+            color: var(--fg-emphasis);
+        }
+
+        .prize-quantity {
+            color: var(--fg-base);
+            font-size: 0.9rem;
+        }
+
+        /* 加權列表 */
+        .rate-item {
+            background: var(--bg-highlight);
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .rate-info {
+            color: var(--fg-emphasis);
+        }
+
+        .rate-participant {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .rate-details {
+            font-size: 0.9rem;
+            color: var(--fg-base);
+        }
+
+        /* 確認頁面摘要 */
+        .summary-section {
+            background: var(--bg-highlight);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+        }
+
+        .summary-title {
+            font-weight: 600;
+            color: var(--primary);
+            margin-bottom: 10px;
+            font-size: 1.1rem;
+        }
+
+        .summary-content {
+            color: var(--fg-emphasis);
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--bg-base);
+        }
+
+        .summary-item:last-child {
+            border-bottom: none;
+        }
+
+        /* 空狀態 */
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            color: var(--fg-base);
+            font-size: 1rem;
+        }
+
+        /* 留言標籤頁 */
+        .comment-tab {
+            padding: 10px 18px;
+            border: 2px solid var(--bg-highlight);
+            background: var(--bg-base);
+            color: var(--fg-base);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.3s ease;
+        }
+
+        .comment-tab:hover {
+            background: var(--bg-highlight);
+            border-color: var(--primary);
+        }
+
+        .comment-tab.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        .comment-tab-content {
+            animation: fadeIn 0.3s ease;
+        }
+
+        /* 重複警告 */
+        .duplicate-warning {
+            background: rgba(220, 50, 47, 0.1);
+            border: 2px solid var(--red);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 10px;
+            color: var(--red);
+        }
+
+        .duplicate-item {
+            padding: 8px;
+            margin: 5px 0;
+            background: rgba(220, 50, 47, 0.05);
+            border-radius: 5px;
+            font-family: monospace;
+        }
+
+        /* Grid */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+
+        /* 自動完成 */
+        .autocomplete-wrapper {
+            position: relative;
+        }
+
+        .autocomplete-items {
+            position: absolute;
+            border: 2px solid var(--bg-highlight);
+            background: var(--bg-base);
+            border-top: none;
+            z-index: 99;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 200px;
+            overflow-y: auto;
+            border-radius: 0 0 10px 10px;
+        }
+
+        .autocomplete-items div {
+            padding: 10px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--bg-highlight);
+            color: var(--fg-emphasis);
+        }
+
+        .autocomplete-items div:hover {
+            background-color: var(--bg-highlight);
+        }
+
+        .autocomplete-active {
+            background-color: var(--primary) !important;
+            color: white !important;
+        }
+
+        /* Modal 樣式 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideIn 0.4s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateY(-50px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 40px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            z-index: 10;
+        }
+
+        .modal-close:hover {
+            background: rgba(255, 255, 255, 0.5);
+            transform: rotate(90deg);
+        }
+
+        /* 結果區域 */
+        .results-section {
+            background: linear-gradient(135deg, var(--result-gradient-start) 0%, var(--result-gradient-end) 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            min-width: 800px;
+        }
+
+        .results-title {
+            font-size: 1.8rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .result-item {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .result-prize {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+        }
+
+        .result-winners {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .winner-tag {
+            background: rgba(255, 255, 255, 0.9);
+            color: var(--fg-emphasis);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 500;
+            font-size: 1rem;
+        }
+
+        /* 載入動畫 */
+        .loading-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(38, 139, 210, 0.95) 0%, rgba(108, 113, 196, 0.95) 100%);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .loading-content {
+            text-align: center;
+            color: white;
+        }
+
+        .gift-box {
+            font-size: 120px;
+            animation: bounce 1s infinite;
+            margin-bottom: 30px;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            100% {
+                transform: translateY(0) scale(1);
+            }
+
+            50% {
+                transform: translateY(-30px) scale(1.1);
+            }
+        }
+
+        .loading-text {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.6;
+            }
+        }
+
+        .countdown {
+            font-size: 3rem;
+            font-weight: bold;
+            margin-top: 20px;
+            animation: countdownPulse 1s infinite;
+        }
+
+        @keyframes countdownPulse {
+
+            0%,
+            100% {
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.2);
+            }
+        }
+
+        .loading-spinner {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-top: 20px;
+        }
+
+        .spinner-dot {
+            width: 15px;
+            height: 15px;
+            background: white;
+            border-radius: 50%;
+            animation: dotBounce 1.4s infinite ease-in-out both;
+        }
+
+        .spinner-dot:nth-child(1) {
+            animation-delay: -0.32s;
+        }
+
+        .spinner-dot:nth-child(2) {
+            animation-delay: -0.16s;
+        }
+
+        @keyframes dotBounce {
+
+            0%,
+            80%,
+            100% {
+                transform: scale(0);
+                opacity: 0.5;
+            }
+
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* 小型補抽動畫 */
+        .mini-loading {
+            display: none;
+            /* 初始隱藏 */
+            position: fixed;
+            /* 改為固定定位覆蓋全螢幕 */
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            /* 稍微透明的黑底 */
+            z-index: 3000;
+            /* 利用 Flexbox 讓內容物絕對置中 */
+            align-items: center;
+            justify-content: center;
+        }
+
+        .mini-loading.active {
+            display: flex;
+            flex-direction: column;
+            animation: fadeIn 0.3s ease;
+        }
+
+        /* 內部的文字與內容容器 */
+        .mini-loading-content {
+            background: rgba(0, 0, 0, 0.9);
+            padding: 40px 60px;
+            border-radius: 20px;
+            text-align: center;
+            color: white;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .mini-loading .gift-box {
+            font-size: 60px;
+            margin-bottom: 15px;
+        }
+
+        .mini-loading .loading-text {
+            font-size: 1.3rem;
+        }
+
+        /* 驗證提示 */
+        .validation-hint {
+            background: rgba(203, 75, 22, 0.1);
+            border: 2px solid var(--orange);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            color: var(--orange);
+            display: none;
+        }
+
+        .validation-hint.show {
+            display: block;
+        }
+
+        /* 快速操作按鈕 */
+        .quick-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        /* 會員限制條件區塊 */
+        .condition-section {
+            background: var(--bg-base);
+            border: 2px solid var(--bg-highlight);
+            border-radius: 12px;
+            margin-bottom: 15px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .condition-section:has(input:checked) {
+            border-color: var(--primary);
+            box-shadow: 0 2px 10px rgba(38, 139, 210, 0.2);
+        }
+
+        .condition-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 15px 20px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .condition-header:hover {
+            background: var(--bg-highlight);
+        }
+
+        .condition-header input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .condition-header label {
+            font-weight: 600;
+            color: var(--fg-emphasis);
+            cursor: pointer;
+            font-size: 1.05rem;
+        }
+
+        .condition-hint {
+            font-size: 0.85rem;
+            color: var(--fg-base);
+            opacity: 0.8;
+        }
+
+        .condition-content {
+            display: none;
+            padding: 0 20px 20px 20px;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .condition-section:has(input:checked) .condition-content {
+            display: block;
+        }
+
+        /* 資格標記 */
+        .qualification-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .qualification-badge.qualified {
+            background: rgba(133, 153, 0, 0.2);
+            color: var(--green);
+            border: 1px solid var(--green);
+        }
+
+        .qualification-badge.unqualified {
+            background: rgba(220, 50, 47, 0.1);
+            color: var(--red);
+            border: 1px solid var(--red);
+        }
+
+        /* 留言預覽項目 */
+        .comment-preview-item {
+            background: var(--bg-base);
+            border: 1px solid var(--bg-highlight);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 8px;
+        }
+
+        .comment-preview-item .commenter-name {
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .comment-preview-item .comment-text {
+            color: var(--fg-base);
+            font-size: 0.9rem;
+            margin-top: 5px;
+            padding-left: 10px;
+            border-left: 3px solid var(--bg-highlight);
+        }
+
+        /* 響應式 */
+        @media (max-width: 768px) {
+            .dual-input-container {
+                grid-template-columns: 1fr;
+            }
+
+            .wizard-step {
+                max-width: 80px;
+            }
+
+            .step-label {
+                font-size: 0.7rem;
+            }
+
+            .results-section {
+                min-width: auto;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="header">
+            <div style="position: absolute; top: 10px; left: 20px; font-size: 0.75rem; opacity: 0.6;">v6.1.1 精靈模式
+                (YT會員抽獎版)</div>
+            <button class="theme-toggle" onclick="toggleTheme()" id="themeToggle" title="切換配色方案">☀️</button>
+            <h1>🎉 "我都OK啊" 頻道抽獎程式</h1>
+            <p>簡單、公正、快速的抽獎工具</p>
+        </div>
+
+        <!-- 精靈步驟指示器 -->
+        <div class="wizard-steps">
+            <div class="wizard-step active" onclick="goToStep(1)" data-step="1">
+                <div class="step-number">1</div>
+                <div class="step-label">導覽</div>
+            </div>
+            <div class="wizard-step" onclick="goToStep(2)" data-step="2">
+                <div class="step-number">2</div>
+                <div class="step-label">活動主題</div>
+            </div>
+            <div class="wizard-step" onclick="goToStep(3)" data-step="3">
+                <div class="step-number">3</div>
+                <div class="step-label">參與者</div>
+            </div>
+            <div class="wizard-step" onclick="goToStep(4)" data-step="4">
+                <div class="step-number">4</div>
+                <div class="step-label">限制設定</div>
+            </div>
+            <div class="wizard-step" onclick="goToStep(5)" data-step="5">
+                <div class="step-number">5</div>
+                <div class="step-label">獎項設定</div>
+            </div>
+            <div class="wizard-step" onclick="goToStep(6)" data-step="6">
+                <div class="step-number">6</div>
+                <div class="step-label">加權(選填)</div>
+            </div>
+            <div class="wizard-step" onclick="goToStep(7)" data-step="7">
+                <div class="step-number">7</div>
+                <div class="step-label">確認抽獎</div>
+            </div>
+        </div>
+
+        <!-- 步驟 1: 導覽設定與環境檢查 (Q&A) -->
+        <div class="step-content active" id="step1">
+            <div class="step-title">🧭 導覽與環境檢查</div>
+            <p class="step-description">本次抽獎的參與者名單來源與限制條件？</p>
+
+            <div class="form-group" style="margin-top: 10px;">
+                <label class="form-label">參與者名單來源</label>
+                <div style="display: flex; gap: 20px; margin-top: 10px; flex-wrap: wrap;">
+                    <label class="checkbox-label" style="margin-bottom:0;">
+                        <input type="radio" name="drawMode" value="manual" checked onchange="checkEnvironmentAndApi()">
+                        📋 自己填入名單 / CSV 匯入
+                    </label>
+                    <label class="checkbox-label" style="margin-bottom:0;">
+                        <input type="radio" name="drawMode" value="form" onchange="checkEnvironmentAndApi()">
+                        📝 從 Google 表單匯入 (重點採用抽獎表單)
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-group" style="margin-top: 20px;">
+                <label class="form-label">必須滿足的加碼限制條件 (無限制則不勾)</label>
+                <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="requireMember" onchange="checkEnvironmentAndApi()">
+                        💎 必須是 YouTube 付費會員
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="requireComment" onchange="checkEnvironmentAndApi()">
+                        💬 必須在指定 YouTube 影片底下留言
+                    </label>
+                </div>
+            </div>
+
+            <!-- 動態環境檢查警示與 API 填寫區 -->
+            <div id="envAlertBox"
+                style="display: none; background: rgba(255,149,0,0.1); border: 1px solid var(--orange); border-radius: 10px; padding: 15px; margin-top: 20px;">
+                <strong style="color: var(--orange); font-size: 1.1rem;">⚠️ 需要提供 API 或進行授權</strong>
+                <p id="envAlertMsg" style="color: var(--fg-base); margin-top: 8px; line-height: 1.5;"></p>
+
+                <div id="envApiInputGroup" style="margin-top: 15px; display: none;">
+                    <div style="margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+                        <label class="checkbox-label"
+                            style="margin-bottom: 0; font-size: 0.9rem; color: var(--blue); font-weight: 600;">
+                            <input type="checkbox" id="privacyBlurToggle" checked onchange="togglePrivacyBlur()">
+                            🔒 直播隱私模式 (模糊顯示內容)
+                        </label>
+                    </div>
+                    <div class="form-group" id="youtubeApiKeyGroup">
+                        <label class="form-label">YouTube Data API 金鑰</label>
+                        <input type="text" id="envYoutubeApiKey" class="form-input" placeholder="AIzaSy..."
+                            onchange="syncApiConfig('key')">
+                    </div>
+                    <div class="form-group" id="memberClientIdGroup">
+                        <label class="form-label">OAuth Client ID</label>
+                        <input type="text" id="envMemberClientId" class="form-input"
+                            placeholder=" xxxxxxxx.apps.googleusercontent.com" onchange="syncApiConfig('client')">
+                    </div>
+                </div>
+                <!-- 幫助說明按鈕 -->
+                <button id="envHelpBtn" class="btn btn-secondary" style="margin-top: 10px;"
+                    onclick="openApiHelpModal()">📖 設定說明</button>
+            </div>
+
+            <!-- 不支援 OAuth 的警告 (file://) -->
+            <div id="corsWarningBox"
+                style="display: none; background: rgba(255,59,48,0.1); border: 1px solid var(--red); border-radius: 10px; padding: 15px; margin-top: 20px;">
+                <strong style="color: var(--red);">⛔ 環境問題：無法授權線上讀取會員！</strong>
+                <p style="color: var(--fg-base); margin-top: 5px;">由於您是以 <code>file://</code> 本機檔案形式開啟此網頁，不允許 OAuth
+                    登入。<br>您只能改用「手動匯入會員 CSV」功能驗證會員，或是架設 Local Server。
+                    <span onclick="toggleLocalServerHelp('step1ServerHelp')"
+                        style="color: var(--blue); cursor: pointer; text-decoration: underline; margin-left: 5px;">[如何架設？]</span>
+                </p>
+                <!-- 展開說明區 -->
+                <div id="step1ServerHelp"
+                    style="display: none; margin-top: 10px; padding: 12px; background: var(--bg-highlight); border-radius: 8px; font-size: 0.9rem; border: 1px solid var(--blue);">
+                    <div style="font-weight: 600; margin-bottom: 5px; color: var(--blue);">快速架設指令：</div>
+                    <ol style="margin-left: 20px; line-height: 1.6;">
+                        <li>開啟 PowerShell 或 CMD。</li>
+                        <li>輸入指令：<code>python -m http.server 8081</code> (需先安裝 Python)。</li>
+                        <li>瀏覽器開啟：<code>http://localhost:8081</code> 即可正常授權。</li>
+                    </ol>
+                </div>
+            </div>
+
+            <div class="validation-hint" id="step1Hint" style="display: none;">
+                請先完成上述設定再繼續
+            </div>
+        </div>
+
+        <!-- 步驟 2: 活動主題 -->
+        <div class="step-content" id="step2">
+            <div class="step-title">🎯 活動主題</div>
+            <p class="step-description">設定本次抽獎活動名稱。</p>
+
+            <div class="form-group">
+                <label class="form-label">活動名稱</label>
+                <input type="text" id="theme" class="form-input" placeholder="例如：年終尾牙抽獎、週年慶回饋活動..." value="">
+            </div>
+
+            <div class="validation-hint" id="step2Hint">
+                請輸入活動名稱後再繼續
+            </div>
+        </div>
+
+        <!-- 步驟 2: 參與者設定 -->
+        <div class="step-content" id="step3">
+            <div class="step-title">👥 參與者設定</div>
+            <p class="step-description">輸入參與抽獎的人員名單，或從 CSV 檔案匯入。識別資料（如Email或頻道網址）為選填，用於確認中獎者身份。</p>
+
+            <!-- CSV 匯入區 -->
+            <div class="csv-import-section"
+                style="background: var(--bg-highlight); padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <div class="form-label" style="color: var(--primary); font-size: 1.1rem; margin-bottom: 15px;">📂 從 CSV
+                    檔案匯入</div>
+                <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                    <input type="file" id="participantsCsvFile" accept=".csv,.txt" onchange="previewParticipantsCsv()"
+                        style="display: none;">
+                    <button class="btn btn-primary" onclick="resetParticipantsCsvAndSelect()">📁 選擇 CSV 檔案</button>
+                    <span id="participantsCsvFileName" style="color: var(--fg-base); font-size: 0.9rem;"></span>
+                </div>
+                <div id="participantsCsvPreview" style="display: none; margin-top: 15px;">
+                    <div class="form-group" style="margin-bottom: 10px;">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="participantsCsvHasHeader" checked
+                                onchange="updateParticipantsCsvPreview()">
+                            第一列是標題列
+                        </label>
+                    </div>
+                    <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                        <div class="form-group" style="flex: 1; min-width: 150px;">
+                            <label class="form-label">顯示名字欄位</label>
+                            <select id="participantsCsvNameCol" class="form-input"
+                                onchange="updateParticipantsCsvPreview()"></select>
+                        </div>
+                        <div class="form-group" style="flex: 1; min-width: 150px;">
+                            <label class="form-label">唯一識別欄位 (選填)</label>
+                            <select id="participantsCsvIdCol" class="form-input"
+                                onchange="updateParticipantsCsvPreview()"></select>
+                        </div>
+                    </div>
+                    <div id="participantsCsvPreviewTable"
+                        style="max-height: 150px; overflow-y: auto; background: var(--bg-base); border-radius: 8px; padding: 10px; margin-bottom: 10px;">
+                    </div>
+                    <button class="btn btn-success" onclick="importParticipantsCsv()">✅ 確認匯入</button>
+                    <button class="btn btn-secondary" onclick="cancelParticipantsCsv()">取消</button>
+                </div>
+            </div>
+
+            <div class="dual-input-container">
+                <div class="input-column">
+                    <div class="form-group">
+                        <label class="form-label">參與者姓名 (每行一位)</label>
+                        <textarea id="participantsNames" class="form-input form-textarea"
+                            placeholder="請輸入參與者姓名,每行一位&#10;例如:&#10;小明&#10;小華&#10;小美"></textarea>
+                    </div>
+                </div>
+                <div class="input-column">
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="blurIdentifyData" checked onchange="toggleBlur()">
+                            模糊顯示識別資料
+                        </label>
+                        <label class="form-label">識別資料 (選填，如Email或頻道網址)</label>
+                        <textarea id="participantsIds" class="form-input form-textarea blurred"
+                            placeholder="請輸入對應的識別資料,每行一位&#10;例如:&#10;ming@email.com&#10;https://youtube.com/channel/xxx&#10;mei_ig"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="quick-actions">
+                <button class="btn btn-primary" onclick="convertHandlesToIds()" id="btnConvertHandles"
+                    style="background: var(--primary); display: none; border: 2px solid white;">🔄 轉換表單裡的 @Handle 為頻道
+                    ID</button>
+                <button class="btn btn-secondary" onclick="generateSampleParticipants()">📋 範例名單</button>
+                <button class="btn btn-danger" onclick="clearParticipants()">🗑️ 清空名單</button>
+                <button class="btn btn-warning" onclick="checkDuplicates()" id="checkDuplicatesBtn"
+                    style="display: none;">🔍 檢查重複識別資料</button>
+            </div>
+
+            <div id="duplicateWarning"></div>
+            <div id="participantsDisplay" class="participants-display">
+                <div class="empty-state">尚未輸入參與者</div>
+            </div>
+
+            <div class="validation-hint" id="step3Hint">
+                請至少輸入一位參與者
+            </div>
+        </div>
+
+        <!-- 步驟 4: 限制設定 -->
+        <div class="step-content" id="step4">
+            <div class="step-title">🔐 限制條件收集</div>
+            <p class="step-description">請依照您先前的選擇，補足抽獎所需的限制條件設定資料。</p>
+
+            <div id="noConditionAlert"
+                style="display: none; background: rgba(52, 199, 89, 0.1); border: 1px solid var(--green); border-radius: 10px; padding: 20px; text-align: center; margin-bottom: 20px;">
+                <span style="font-size: 2rem;">✅</span>
+                <h3 style="color: var(--green); margin-top: 10px;">無額外限制條件</h3>
+                <p style="color: var(--fg-base); margin-top: 5px;">本次抽獎未勾選任何進階限制，請直接點擊「下一步」。</p>
+            </div>
+
+            <!-- 條件 B：付費會員驗證 -->
+            <div class="condition-section" id="memberConditionSetup" style="display: none;">
+                <div class="condition-header" style="background: var(--bg-highlight); cursor: default;">
+                    <span style="font-size: 1.2rem; margin-right: 8px;">💎</span>
+                    <label style="font-size: 1.1rem; color: var(--fg-emphasis);">付費會員設定 (需要資料驗證)</label>
+                </div>
+                <div id="memberCheckContent" class="condition-content" style="display: block;">
+                    <div class="csv-import-section"
+                        style="background: var(--bg-highlight); padding: 20px; border-radius: 10px;">
+                        <div
+                            style="background: rgba(38, 139, 210, 0.1); padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid var(--primary);">
+                            <div
+                                style="font-weight: 600; color: var(--primary); margin-bottom: 10px; display: flex; align-items: center; gap: 8px;">
+                                🔑 官方 API 自動同步設定
+                                <span onclick="toggleApiHelp()"
+                                    style="cursor: pointer; background: var(--bg-highlight); border-radius: 50%; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; border: 1px solid var(--primary); color: var(--primary);"
+                                    title="收合／展開教學步驟">?</span>
+                            </div>
+                            <div
+                                style="color: var(--fg-base); font-size: 0.95rem; margin-bottom: 15px; border-left: 3px solid var(--primary); padding-left: 10px;">
+                                系統將會使用您於設定區提供的 OAuth Client ID 來獲取付費會員名單。
+                            </div>
+
+                            <div
+                                style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 10px;">
+                                <button class="btn btn-primary" onclick="handleAuthClick()">🔐 授權並抓取會員名單</button>
+                                <button class="btn btn-secondary" onclick="handleSignoutClick()" id="btn_signout"
+                                    style="display:none;">登出</button>
+                                <span id="api_status" style="font-size: 0.9rem; color: var(--fg-base);">尚未授權</span>
+                            </div>
+
+                            <small style="display: block; margin-top: 8px; color: var(--fg-base); opacity: 0.8;">
+                                * 需透過 OAuth 驗證獲取私有資料。
+                            </small>
+                        </div>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <input type="file" id="memberCsvFile" accept=".csv" onchange="previewMemberCsv()"
+                                style="display: none;">
+                            <button class="btn btn-primary" onclick="resetMemberCsvAndSelect()">📁 手動匯入會員 CSV 檔</button>
+                            <span id="memberCsvFileName" style="color: var(--fg-base); font-size: 0.9rem;"></span>
+                        </div>
+                        <div id="memberCsvPreview" style="display: none; margin-top: 15px;">
+                            <div class="form-group" style="margin-bottom: 10px;">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="memberCsvHasHeader" checked
+                                        onchange="updateMemberCsvPreview()">
+                                    第一列是標題列
+                                </label>
+                            </div>
+                            <div style="display: flex; gap: 15px; flex-wrap: wrap; margin-bottom: 15px;">
+                                <div class="form-group" style="flex: 1; min-width: 120px;">
+                                    <label class="form-label">會員名稱</label>
+                                    <select id="memberCsvNameCol" class="form-input"
+                                        onchange="updateMemberCsvPreview()"></select>
+                                </div>
+                                <div class="form-group" style="flex: 1; min-width: 120px;">
+                                    <label class="form-label">頻道 URL</label>
+                                    <select id="memberCsvUrlCol" class="form-input"
+                                        onchange="updateMemberCsvPreview()"></select>
+                                </div>
+                                <div class="form-group" style="flex: 1; min-width: 120px;">
+                                    <label class="form-label">會員時長</label>
+                                    <select id="memberCsvDurationCol" class="form-input"
+                                        onchange="updateMemberCsvPreview()"></select>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-bottom: 15px;">
+                                <label class="form-label">最低會員月數</label>
+                                <div style="display: flex; align-items: center; gap: 10px;">
+                                    <input type="number" id="memberMinMonths" class="form-input" style="width: 100px;"
+                                        value="0" min="0">
+                                    <span style="color: var(--fg-base);">個月（0 = 不限制）</span>
+                                </div>
+                            </div>
+                            <div id="memberCsvPreviewTable"
+                                style="max-height: 150px; overflow-y: auto; background: var(--bg-base); border-radius: 8px; padding: 10px; margin-bottom: 10px;">
+                            </div>
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn btn-success" onclick="importMemberCsv()">✅ 確認匯入</button>
+                                <button class="btn btn-secondary" onclick="cancelMemberCsv()">取消</button>
+                            </div>
+                        </div>
+                        <div id="memberImportResult" style="display: none; margin-top: 15px;">
+                            <div
+                                style="background: rgba(133, 153, 0, 0.1); border: 2px solid var(--green); border-radius: 10px; padding: 15px;">
+                                <strong style="color: var(--green);">✅ 已匯入會員資料</strong>
+                                <div id="memberImportStats" style="margin-top: 10px; color: var(--fg-base);"></div>
+                                <button class="btn btn-secondary" onclick="clearMemberData()"
+                                    style="margin-top: 10px;">🗑️ 清除會員資料</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 條件 C：留言驗證 -->
+            <div class="condition-section" id="commentConditionSetup" style="display: none;">
+                <div class="condition-header" style="background: var(--bg-highlight); cursor: default;">
+                    <span style="font-size: 1.2rem; margin-right: 8px;">💬</span>
+                    <label style="font-size: 1.1rem; color: var(--fg-emphasis);">留言驗證設定 (需要獲得留言紀錄)</label>
+                </div>
+                <div id="commentCheckContent" class="condition-content" style="display: block;">
+                    <!-- YouTube Data API 獲取留言區塊 -->
+                    <div id="commentTabYoutube"
+                        style="background: var(--bg-highlight); padding: 20px; border-radius: 10px;">
+                        <p style="color: var(--fg-base); margin-bottom: 15px; line-height: 1.6;">
+                            系統將使用您於設定區提供的 <strong>YouTube Data API 金鑰</strong> 獲取影片的所有留言。
+                        </p>
+
+                        <div class="form-group">
+                            <label class="form-label">指定要抽取的 YouTube 影片網址或影片 ID</label>
+                            <input type="text" id="youtubeVideoUrl" class="form-input"
+                                placeholder="例如: https://www.youtube.com/watch?v=xxxx 或 xxxx">
+                        </div>
+                        <div style="margin-top: 15px;">
+                            <button class="btn btn-primary" onclick="fetchCommentsFromYouTubeAPI()"
+                                id="btnFetchYoutube">📥 獲取留言</button>
+                            <span id="youtubeApiStatus" style="margin-left: 10px; color: var(--fg-base);"></span>
+                        </div>
+                        <div id="youtubeApiQuotaInfo"
+                            style="display: block; margin-top: 15px; padding: 10px; background: rgba(38, 139, 210, 0.1); border: 1px solid var(--blue); border-radius: 8px; color: var(--fg-base);">
+                            ℹ️ 每次獲取留言約消耗 1-5 單位配額，每日免費配額為 10,000 單位。
+                        </div>
+
+                        <!-- 針對受限影片的 OAuth 授權提示 (隱藏，報錯時才顯示或可手動點擊) -->
+                        <div id="commentOAuthArea"
+                            style="margin-top: 15px; padding: 12px; background: rgba(0, 122, 255, 0.05); border: 1px dashed var(--blue); border-radius: 8px; display: none;">
+                            <div id="commentAuthNormalHint">
+                                <div style="font-size: 0.9rem; color: var(--fg-base); margin-bottom: 8px;">
+                                    💡 若該影片為<strong>會員專屬</strong>或<strong>不公開</strong>，請先授權您的 YouTube 帳號：
+                                </div>
+                                <button class="btn btn-primary" onclick="handleAuthClick()"
+                                    style="font-size: 0.85rem; padding: 5px 12px;">🔐 授權 YouTube 存取權</button>
+                                <span id="comment_auth_status"
+                                    style="font-size: 0.85rem; margin-left: 8px; color: var(--fg-base);">尚未授權</span>
+                            </div>
+
+                            <!-- 協議警告 (針對 file://) -->
+                            <div id="commentCorsWarning"
+                                style="display: none; color: var(--red); font-size: 0.9rem; margin-top: 5px;">
+                                ⛔ <strong>目前為本機檔案環境：</strong>受限於 Google 安全規範，<code>file://</code> 無法執行 OAuth 授權。<br>
+                                您可能需要：<br>
+                                1. 使用「手動抓取腳本」並從下方匯入 JSON。<br>
+                                2. 架設 Local Server (如 Python http.server) 後開啟此網頁。
+                                <span onclick="toggleLocalServerHelp('commentServerHelp')"
+                                    style="color: var(--blue); cursor: pointer; text-decoration: underline; margin-left: 5px;">[如何架設？]</span>
+                            </div>
+                            <!-- 展開說明區 -->
+                            <div id="commentServerHelp"
+                                style="display: none; margin-top: 10px; padding: 12px; background: var(--bg-highlight); border-radius: 8px; font-size: 0.85rem; border: 1px solid var(--blue); color: var(--fg-base);">
+                                <div style="font-weight: 600; margin-bottom: 5px; color: var(--blue);">快速架設指令：</div>
+                                <code
+                                    style="display: block; background: #eee; padding: 5px; border-radius: 4px; margin-bottom: 5px;">python -m http.server 8081</code>
+                                然後在網址列點擊：<a href="http://localhost:8081" target="_blank"
+                                    style="color: var(--accent);">http://localhost:8081</a>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 共用的結果顯示區域 -->
+                    <div id="commentParseResult" style="display: none; margin-top: 15px;">
+                        <div
+                            style="background: rgba(133, 153, 0, 0.1); border: 2px solid var(--green); border-radius: 10px; padding: 15px;">
+                            <strong style="color: var(--green);">✅ 已解析留言資料</strong>
+                            <div id="commentParseStats" style="margin-top: 10px; color: var(--fg-base);"></div>
+                        </div>
+                        <div id="commentPreviewList" style="margin-top: 15px; max-height: 200px; overflow-y: auto;">
+                        </div>
+                        <div style="margin-top: 10px; display: flex; gap: 10px; flex-wrap: wrap;">
+                            <button class="btn btn-secondary" onclick="clearCommentData()">🗑️ 清除留言資料</button>
+                            <button class="btn btn-secondary" onclick="exportCommenters()">💾 匯出留言資料</button>
+                        </div>
+                    </div>
+
+                    <!-- 匯入留言資料 -->
+                    <div style="margin-top: 15px; padding: 15px; background: var(--bg-highlight); border-radius: 10px;">
+                        <div style="font-weight: 600; margin-bottom: 10px;">📂 匯入已儲存的留言資料</div>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <input type="file" id="commentImportFile" accept=".json" style="display: none;"
+                                onchange="importCommenters(this)">
+                            <button class="btn btn-secondary" onclick="resetCommentImportAndSelect()">📁 選擇 JSON
+                                檔案</button>
+                            <span id="commentImportFileName" style="color: var(--fg-base); font-size: 0.9rem;"></span>
+                        </div>
+                        <div style="margin-top: 8px; font-size: 0.85rem; color: var(--fg-base);">
+                            可匯入之前匯出的留言資料，避免重複使用 API 配額
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 驗證結果摘要 -->
+            <div id="qualificationSummary" class="summary-section" style="display: none; margin-top: 20px;">
+                <div class="summary-title">📊 資格驗證結果</div>
+                <div id="qualificationStats" class="summary-content"></div>
+            </div>
+        </div>
+
+        <!-- 步驟 4: 獎項設定 -->
+        <div class="step-content" id="step5">
+            <div class="step-title">🏆 獎項設定</div>
+            <p class="step-description">設定要抽出的獎項及數量。可新增多個不同獎項。</p>
+
+            <div class="grid">
+                <div>
+                    <div class="form-group">
+                        <label class="form-label">獎項名稱</label>
+                        <input type="text" id="prizeName" class="form-input" placeholder="例如：頭獎、特別獎...">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">獎項數量</label>
+                        <input type="number" id="prizeQuantity" class="form-input" placeholder="1" min="1" value="1">
+                    </div>
+                    <button class="btn btn-primary" onclick="addPrize()">➕ 新增獎項</button>
+                    <div class="quick-actions">
+                        <button class="btn btn-secondary" onclick="generateSamplePrizes()">📋 範例獎項</button>
+                        <button class="btn btn-danger" onclick="clearPrizes()">🗑️ 清空獎項</button>
+                    </div>
+                </div>
+                <div>
+                    <div class="form-label">已設定獎項</div>
+                    <div id="prizesList">
+                        <div class="empty-state">尚未新增獎項</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="validation-hint" id="step5Hint">
+                請至少新增一個獎項
+            </div>
+        </div>
+
+        <!-- 步驟 5: 加權設定 -->
+        <div class="step-content" id="step6">
+            <div class="step-title">🎲 加權設定 (選填)</div>
+            <p class="step-description">可為特定參與者設定中獎機率倍數。此步驟為選填，可直接跳過。</p>
+
+            <div class="grid">
+                <div>
+                    <div class="form-group autocomplete-wrapper">
+                        <label class="form-label">參與者名稱</label>
+                        <input type="text" id="rateParticipant" class="form-input" placeholder="請輸入參與者名稱">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">選擇獎項</label>
+                        <select id="ratePrize" class="form-input">
+                            <option value="all">全部獎項</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">加權倍率</label>
+                        <input type="number" id="ratePercentage" class="form-input" placeholder="0, 0.5, 1, 2..."
+                            min="0" step="0.1" value="2">
+                        <small style="color: var(--fg-base); display: block; margin-top: 5px;">
+                            0 = 不會中獎，1 = 正常機率，2 = 兩倍機率
+                        </small>
+                    </div>
+                    <button class="btn btn-primary" onclick="addWinRate()">➕ 新增加權設定</button>
+                    <div class="quick-actions">
+                        <button class="btn btn-secondary" onclick="generateSampleWeights()">🎲 娛樂：加權(竹竹+,泰哥-)</button>
+                    </div>
+                </div>
+                <div>
+                    <div class="form-label">已設定加權</div>
+                    <div id="ratesList">
+                        <div class="empty-state">尚未設定加權（可跳過此步驟）</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 步驟 6: 確認與抽獎 -->
+        <div class="step-content" id="step7">
+            <div class="step-title">✅ 確認與抽獎</div>
+            <p class="step-description">請確認以下抽獎設定，確認無誤後點擊「開始抽獎」。</p>
+
+            <div id="confirmationSummary"></div>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <button class="btn btn-draw" onclick="startDraw()">🎊 開始抽獎</button>
+                <button class="btn btn-secondary" id="viewLastResultBtn" onclick="viewLastResult()"
+                    style="display: none; margin-left: 10px;">
+                    📋 查看上次抽獎結果
+                </button>
+            </div>
+        </div>
+
+        <!-- 導航按鈕 -->
+        <div class="wizard-nav">
+            <div class="nav-left">
+                <button class="btn btn-secondary" id="prevBtn" onclick="prevStep()" style="display: none;">
+                    ⬅️ 上一步
+                </button>
+            </div>
+            <div class="nav-right">
+                <button class="btn btn-primary" id="nextBtn" onclick="nextStep()">
+                    下一步 ➡️
+                </button>
+                <button class="btn btn-success" id="skipBtn" onclick="nextStep()" style="display: none;">
+                    跳過此步驟 ⏭️
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 浮動結果視窗 -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal-content">
+            <div class="modal-close" onclick="closeModal()">×</div>
+            <div id="modalResults"></div>
+            <div class="mini-loading" id="miniLoading">
+                <div class="mini-loading-content">
+                    <div class="gift-box">🎁</div>
+                    <div class="loading-text">補抽中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- API 教學對話框 (Modal) -->
+    <div class="modal-overlay" id="apiHelpModalOverlay">
+        <div class="modal-content"
+            style="background: var(--bg-base); border-radius: 15px; box-shadow: 0 10px 30px var(--shadow-color); max-width: 700px; max-height: 85vh; overflow-y: auto; text-align: left; padding: 35px 30px;">
+            <div class="modal-close" onclick="closeApiHelpModal()">×</div>
+            <h2
+                style="color: var(--fg-emphasis); margin-bottom: 20px; border-bottom: 2px solid var(--primary); padding-bottom: 10px;">
+                📖 API 與授權設定教學</h2>
+
+            <div style="margin-bottom: 30px;">
+                <h3 style="color: var(--blue); margin-bottom: 12px; font-size: 1.15rem;">🔑 YouTube Data API 金鑰
+                    (抓影片留言、轉換頻道 ID 用)</h3>
+                <ol style="color: var(--fg-base); line-height: 1.7; margin-left: 20px; font-size: 0.95rem;">
+                    <li>前往 <a href="https://console.cloud.google.com/" target="_blank"
+                            style="color: var(--accent); text-decoration: underline;">Google Cloud Console</a> 並登入您的
+                        Google 帳號。</li>
+                    <li>點擊左上角「選取專案」，然後點擊「新增專案」建立。</li>
+                    <li>在上方搜尋欄搜尋「<strong>YouTube Data API v3</strong>」並點擊進入後按「啟用」。</li>
+                    <li>在左側導覽列點選「API 和服務」 > 「憑證」。</li>
+                    <li>點擊上方的「+ 建立憑證」，並選擇「<strong>API 金鑰</strong>」。</li>
+                    <li>取得並複製該串金鑰，貼回家本程式畫面中的**「YouTube Data API 金鑰」**欄位即可！</li>
+                </ol>
+            </div>
+
+            <div>
+                <h3 style="color: var(--green); margin-bottom: 12px; font-size: 1.15rem;">🔐 OAuth Client ID
+                    (抓取專屬付費會員清單用)</h3>
+                <ol style="color: var(--fg-base); line-height: 1.7; margin-left: 20px; font-size: 0.95rem;">
+                    <li>同樣在 Google Cloud Console，點擊左側「API 和服務」 > 「<strong>OAuth 同意畫面</strong>」。</li>
+                    <li>選擇「外部」並點選建立，填寫必填的「應用程式名稱」、「使用者支援電子郵件」及最下方的開發人員電子郵件，其餘留空即可，一路按「儲存並繼續」到底。</li>
+                    <li>回到左側導覽列點選「API 和服務」 > 「憑證」。</li>
+                    <li>點擊上方的「+ 建立憑證」，選擇「<strong>OAuth 用戶端 ID</strong>」。</li>
+                    <li>「應用程式類型」選擇為「<strong>網頁應用程式</strong>」。</li>
+                    <li>在「已授權的 JavaScript 來源」與「已授權的重新導向 URI」，輸入您目前運行伺服器的網址（必填：例如 <code>http://localhost:8081</code>）。
+                    </li>
+                    <li>點擊建立後，複製這串 <strong>用戶端 ID</strong> (通常以 .apps.googleusercontent.com 結尾)，貼回家本程式的對應欄位！</li>
+                </ol>
+                <div
+                    style="background: rgba(255,149,0,0.1); border-left: 4px solid var(--orange); padding: 12px; margin-top: 15px; color: var(--fg-base); font-size: 0.9rem; line-height: 1.5; border-radius: 4px;">
+                    <strong>補充提醒：</strong> 由於嚴苛的安全性限制，OAuth 授權流程無法在直接雙擊右鍵執行的 <code>file://</code>
+                    本地檔案環境下運作。若您要使用自動抓取會員功能，必須將網頁放置於您的伺服器，或利用簡單的指令（如 <code>python -m http.server</code>）開啟網站。
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 30px;">
+                <button class="btn btn-primary" onclick="closeApiHelpModal()">我了解了！</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 過場動畫 -->
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="gift-box">🎁</div>
+            <div class="loading-text">正在抽獎中...</div>
+            <div class="countdown" id="countdown"></div>
+            <div class="loading-spinner">
+                <div class="spinner-dot"></div>
+                <div class="spinner-dot"></div>
+                <div class="spinner-dot"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 上方的 USER_CONFIG 已移至 <head> 區以便使用者設定
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+        // ============================================================
+
+        function openApiHelpModal() {
+            document.getElementById('apiHelpModalOverlay').classList.add('active');
+        }
+
+        function closeApiHelpModal() {
+            document.getElementById('apiHelpModalOverlay').classList.remove('active');
+        }
+
+        function toggleLocalServerHelp(id) {
+            const el = document.getElementById(id);
+            if (el) {
+                el.style.display = el.style.display === 'none' ? 'block' : 'none';
+            }
+        }
+
+        function togglePrivacyBlur() {
+            const isBlur = document.getElementById('privacyBlurToggle').checked;
+            const inputs = ['envYoutubeApiKey', 'envMemberClientId'];
+            inputs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    if (isBlur) el.classList.add('privacy-blur');
+                    else el.classList.remove('privacy-blur');
+                }
+            });
+        }
+
+        // 資料儲存
+        let prizes = [];
+        let participants = [];
+        let results = [];
+        let winRates = [];
+        let participantDataMap = new Map();
+        let lastDrawLog = [];
+        let currentStep = 1;
+        const totalSteps = 7;
+        // 記錄參與表單與否
+        let drawMode = 'manual';
+
+        function checkEnvironmentAndApi() {
+            const isLocal = window.location.protocol === 'file:';
+            const modeElement = document.querySelector('input[name="drawMode"]:checked');
+            drawMode = modeElement ? modeElement.value : 'manual';
+
+            const reqMember = document.getElementById('requireMember').checked;
+            const reqComment = document.getElementById('requireComment').checked;
+
+            const alertBox = document.getElementById('envAlertBox');
+            const alertMsg = document.getElementById('envAlertMsg');
+            const apiGroup = document.getElementById('envApiInputGroup');
+            const ytKeyGroup = document.getElementById('youtubeApiKeyGroup');
+            const clientGroup = document.getElementById('memberClientIdGroup');
+            const corsBox = document.getElementById('corsWarningBox');
+            const step1Hint = document.getElementById('step1Hint');
+
+            if (alertBox) alertBox.style.display = 'none';
+            if (corsBox) corsBox.style.display = 'none';
+            if (apiGroup) apiGroup.style.display = 'none';
+            if (ytKeyGroup) ytKeyGroup.style.display = 'none';
+            if (clientGroup) clientGroup.style.display = 'none';
+            if (step1Hint) step1Hint.style.display = 'none';
+
+            let needsApiKey = reqComment;
+            let needsClientId = reqMember && !isLocal;
+
+            if (isLocal && reqMember && corsBox) {
+                corsBox.style.display = 'block';
+            }
+
+            let missingYtKey = needsApiKey && !USER_CONFIG.YOUTUBE_API_KEY;
+            let missingClient = needsClientId && (!USER_CONFIG.CLIENT_ID || USER_CONFIG.CLIENT_ID.includes('你的_CLIENT_ID'));
+
+            if (missingYtKey || missingClient) {
+                if (alertBox) alertBox.style.display = 'block';
+                if (apiGroup) apiGroup.style.display = 'block';
+
+                let msgs = [];
+                if (missingYtKey) {
+                    if (ytKeyGroup) ytKeyGroup.style.display = 'block';
+                    msgs.push('您啟用了留言驗證，需填寫 YouTube Data API 金鑰。');
+                }
+                if (missingClient) {
+                    if (clientGroup) clientGroup.style.display = 'block';
+                    msgs.push('您啟用了會員驗證，為透過 OAuth 存取私有資料請提供 Client ID。');
+                }
+                if (alertMsg) alertMsg.innerHTML = msgs.join('<br>');
+
+                let tempKey = document.getElementById('envYoutubeApiKey')?.value;
+                let tempClient = document.getElementById('envMemberClientId')?.value;
+                if ((missingYtKey && !tempKey) || (missingClient && !tempClient)) {
+                    if (step1Hint) step1Hint.style.display = 'block';
+                }
+            }
+
+            updateStep3UI();
+            updateStep4UI(reqMember, reqComment);
+
+            // 初始化隱私模糊狀態
+            togglePrivacyBlur();
+        }
+
+        function syncApiConfig(type) {
+            if (type === 'key') {
+                USER_CONFIG.YOUTUBE_API_KEY = document.getElementById('envYoutubeApiKey').value;
+            } else if (type === 'client') {
+                USER_CONFIG.CLIENT_ID = document.getElementById('envMemberClientId').value;
+            }
+            checkEnvironmentAndApi();
+        }
+
+        function scrollToHelp() {
+            alert('有關 API 免費申請教學，您可於後續【付費會員設定】處展開詳細圖文說明。');
+        }
+
+        function updateStep3UI() {
+            const manualInputArea = document.querySelector('.dual-input-container');
+            const csvImportSection = document.querySelector('#step3 .csv-import-section');
+            const step3Desc = document.querySelector('#step3 .step-description');
+            const btnConvert = document.getElementById('btnConvertHandles');
+
+            if (drawMode === 'form') {
+                if (manualInputArea) manualInputArea.style.display = 'none';
+                if (csvImportSection) {
+                    csvImportSection.style.display = 'block';
+                    csvImportSection.querySelector('.form-label').innerText = '📂 從 Google 抽獎表單匯入 CSV';
+                }
+                if (step3Desc) step3Desc.innerText = '請匯入您的 Google 抽獎表單 CSV，作為主要參與者名單。';
+                if (btnConvert) btnConvert.style.display = 'inline-block';
+            } else {
+                if (manualInputArea) manualInputArea.style.display = 'flex';
+                if (csvImportSection) {
+                    csvImportSection.style.display = 'block';
+                    csvImportSection.querySelector('.form-label').innerText = '📂 從一般 CSV 檔案匯入 (選填)';
+                }
+                if (step3Desc) step3Desc.innerText = '輸入參與抽獎的人員名單，或從 CSV 檔案匯入。識別資料為選填。';
+                if (btnConvert) btnConvert.style.display = 'none';
+            }
+        }
+
+        function updateStep4UI(reqMember, reqComment) {
+            const memberArea = document.getElementById('memberConditionSetup');
+            const commentArea = document.getElementById('commentConditionSetup');
+            const noConditionAlert = document.getElementById('noConditionAlert');
+
+            if (memberArea) memberArea.style.display = reqMember ? 'block' : 'none';
+            if (commentArea) commentArea.style.display = reqComment ? 'block' : 'none';
+
+            if (noConditionAlert) {
+                noConditionAlert.style.display = (!reqMember && !reqComment) ? 'block' : 'none';
+            }
+        }
+
+        // 初始化時呼叫以建立正確 UI
+        document.addEventListener('DOMContentLoaded', () => {
+            checkEnvironmentAndApi();
+        });
+
+        // 會員限制資料儲存
+        let memberList = new Map();          // 付費會員：channelId -> {name, months, url}
+        let commenters = new Map();          // 留言者：channelId -> {name, content}
+        let commentersByHandle = new Map();  // 留言者 handle 對應：normalizedHandle -> channelId
+        let memberCsvData = [];              // 會員 CSV 原始資料
+        let participantsCsvData = [];        // 參與者 CSV 原始資料
+
+        // 精靈導航
+        function goToStep(step) {
+            // 只能前往已完成的步驟或當前步驟
+            if (step > currentStep) {
+                // 檢查是否可以前進
+                if (!validateCurrentStep()) return;
+            }
+
+            currentStep = step;
+            updateWizardUI();
+        }
+
+        function nextStep() {
+            // 步驟 4（限制收集）和步驟 6（加權設定）可直接過
+            if (currentStep === 4 || currentStep === 6 || validateCurrentStep()) {
+                if (currentStep < totalSteps) {
+                    currentStep++;
+                    updateWizardUI();
+                }
+            }
+        }
+
+        function prevStep() {
+            if (currentStep > 1) {
+                currentStep--;
+                updateWizardUI();
+            }
+        }
+
+        function validateCurrentStep() {
+            let isValid = true;
+
+            switch (currentStep) {
+                case 1:
+                    // 檢查環境設定是否完成
+                    checkEnvironmentAndApi();
+                    const hintStyle = document.getElementById('step1Hint')?.style.display;
+                    isValid = hintStyle !== 'block';
+                    break;
+                case 2:
+                    const theme = document.getElementById('theme').value.trim();
+                    isValid = theme.length > 0;
+                    document.getElementById('step2Hint').classList.toggle('show', !isValid);
+                    break;
+                case 3:
+                    isValid = participants.length > 0;
+                    document.getElementById('step3Hint').classList.toggle('show', !isValid);
+                    break;
+                case 4:
+                    isValid = true; // 限制設定只要點了跳過或預填可過
+                    break;
+                case 5:
+                    isValid = prizes.length > 0;
+                    document.getElementById('step5Hint').classList.toggle('show', !isValid);
+                    break;
+                case 6:
+                    isValid = true; // 加權為選填
+                    break;
+            }
+
+            return isValid;
+        }
+
+        function updateWizardUI() {
+            // 更新步驟指示器
+            document.querySelectorAll('.wizard-step').forEach((step, index) => {
+                const stepNum = index + 1;
+                step.classList.remove('active', 'completed');
+
+                if (stepNum === currentStep) {
+                    step.classList.add('active');
+                } else if (stepNum < currentStep) {
+                    step.classList.add('completed');
+                }
+            });
+
+            // 更新步驟內容顯示
+            document.querySelectorAll('.step-content').forEach((content, index) => {
+                content.classList.remove('active');
+                if (index + 1 === currentStep) {
+                    content.classList.add('active');
+                }
+            });
+
+            // 如果目前是在步驟 4（限制條件收集），動態顯示相關設置區塊
+            if (currentStep === 4) {
+                const reqMember = document.getElementById('requireMember').checked;
+                const reqComment = document.getElementById('requireComment').checked;
+
+                const memberSetup = document.getElementById('memberConditionSetup');
+                const commentSetup = document.getElementById('commentConditionSetup');
+                const noCondAlert = document.getElementById('noConditionAlert');
+
+                if (memberSetup) memberSetup.style.display = reqMember ? 'block' : 'none';
+                if (commentSetup) commentSetup.style.display = reqComment ? 'block' : 'none';
+                if (noCondAlert) noCondAlert.style.display = (!reqMember && !reqComment) ? 'block' : 'none';
+            }
+
+            // 更新導航按鈕
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const skipBtn = document.getElementById('skipBtn');
+
+            prevBtn.style.display = currentStep > 1 ? 'inline-block' : 'none';
+
+            if (currentStep === totalSteps) {
+                nextBtn.style.display = 'none';
+                skipBtn.style.display = 'none';
+            } else if (currentStep === 4 || currentStep === 6) {
+                // 步驟 4（限制收集）和步驟 6（加權設定）為選填
+                nextBtn.style.display = 'inline-block';
+                nextBtn.textContent = '下一步 ➡️';
+                skipBtn.style.display = 'inline-block';
+            } else {
+                nextBtn.style.display = 'inline-block';
+                nextBtn.textContent = '下一步 ➡️';
+                skipBtn.style.display = 'none';
+            }
+
+            // 更新確認頁面摘要
+            if (currentStep === 7) {
+                updateConfirmationSummary();
+            }
+
+            // 隱藏驗證提示
+            document.querySelectorAll('.validation-hint').forEach(hint => {
+                hint.classList.remove('show');
+            });
+        }
+
+        function updateConfirmationSummary() {
+            const theme = document.getElementById('theme').value || '抽獎活動';
+            const totalPrizes = prizes.reduce((sum, prize) => sum + prize.quantity, 0);
+
+            // 計算符合資格的參與者
+            const qualifiedParticipants = getQualifiedParticipants();
+            const qualifiedCount = qualifiedParticipants.length;
+
+            const avgRate = qualifiedCount > 0
+                ? (totalPrizes / qualifiedCount * 100).toFixed(2)
+                : '0.00';
+
+            let html = `
+                <div class="summary-section">
+                    <div class="summary-title">📌 活動資訊</div>
+                    <div class="summary-content">
+                        <div class="summary-item">
+                            <span>活動名稱</span>
+                            <strong>${theme}</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="summary-section">
+                    <div class="summary-title">👥 參與者</div>
+                    <div class="summary-content">
+                        <div class="summary-item">
+                            <span>總人數</span>
+                            <strong>${participants.length} 人</strong>
+                        </div>
+            `;
+
+            // 顯示會員限制篩選結果
+            const enableMember = document.getElementById('requireMember')?.checked;
+            const enableComment = document.getElementById('requireComment')?.checked;
+
+            if (enableMember || enableComment) {
+                html += `
+                        <div class="summary-item" style="border-top: 1px dashed var(--fg-base); padding-top: 8px; margin-top: 8px;">
+                            <span>🔐 符合會員限制條件</span>
+                            <strong style="color: var(--green);">${qualifiedCount} 人</strong>
+                        </div>
+                `;
+                if (qualifiedCount < participants.length) {
+                    html += `
+                        <div class="summary-item">
+                            <span style="color: var(--red);">❌ 不符合條件</span>
+                            <strong style="color: var(--red);">${participants.length - qualifiedCount} 人</strong>
+                        </div>
+                    `;
+                }
+            }
+
+            html += `
+                    </div>
+                </div>
+                
+                <div class="summary-section">
+                    <div class="summary-title">🏆 獎項</div>
+                    <div class="summary-content">
+            `;
+
+            prizes.forEach(prize => {
+                html += `
+                    <div class="summary-item">
+                        <span>${prize.name}</span>
+                        <strong>${prize.quantity} 個</strong>
+                    </div>
+                `;
+            });
+
+            html += `
+                        <div class="summary-item" style="border-top: 2px solid var(--primary); padding-top: 10px; margin-top: 5px;">
+                            <span>總獎項數 / 平均中獎率</span>
+                            <strong>${totalPrizes} 個 / ${avgRate}%</strong>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            if (winRates.length > 0) {
+                html += `
+                    <div class="summary-section">
+                        <div class="summary-title">🎲 加權設定</div>
+                        <div class="summary-content">
+                `;
+                winRates.forEach(rate => {
+                    html += `
+                        <div class="summary-item">
+                            <span>${rate.participant}</span>
+                            <strong>${rate.percentage}x (${rate.prizeName})</strong>
+                        </div>
+                    `;
+                });
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            // 檢查是否有問題
+            if (totalPrizes > qualifiedCount) {
+                html += `
+                    <div style="background: rgba(220, 50, 47, 0.1); border: 2px solid var(--red); border-radius: 10px; padding: 15px; color: var(--red);">
+                        ⚠️ 警告：獎項總數 (${totalPrizes}) 超過符合資格的參與者人數 (${qualifiedCount})！
+                    </div>
+                `;
+            }
+
+            document.getElementById('confirmationSummary').innerHTML = html;
+        }
+
+        // 取得符合資格的參與者列表
+        function getQualifiedParticipants() {
+            const enableMember = document.getElementById('requireMember')?.checked;
+            const enableComment = document.getElementById('requireComment')?.checked;
+            const minMonths = parseInt(document.getElementById('memberMinMonths')?.value) || 0;
+
+            // 如果沒有啟用額外限制，所有匯入的參與者皆符合資格（若為表單抽獎，匯入對象即為參賽者）
+            if (!enableMember && !enableComment) {
+                return [...participants];
+            }
+
+            return participants.filter(participant => {
+                const data = participantDataMap.get(participant);
+                const identifyData = data?.identifyData || '';
+                const originalName = data?.originalName || participant;
+
+                // 會員驗證
+                if (enableMember && memberList.size > 0) {
+                    let memberMatch = false;
+                    let memberMonths = 0;
+
+                    // 1. 用 Channel ID 直接匹配
+                    const channelId = extractChannelId(identifyData);
+                    if (channelId && memberList.has(channelId)) {
+                        const memberData = memberList.get(channelId);
+                        memberMatch = true;
+                        memberMonths = memberData.months;
+                    }
+
+                    // 2. 用識別資料的 handle 比對會員的 channelId
+                    if (!memberMatch && identifyData) {
+                        const normalizedIdentify = normalizeHandle(identifyData);
+                        if (normalizedIdentify) {
+                            for (let [id, memberData] of memberList) {
+                                const normalizedMemberId = normalizeHandle(id);
+                                if (normalizedMemberId && normalizedMemberId === normalizedIdentify) {
+                                    memberMatch = true;
+                                    memberMonths = memberData.months;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. 用識別資料的 handle 比對會員的 name（都是 handle 格式）
+                    if (!memberMatch && identifyData) {
+                        const normalizedIdentify = normalizeHandle(identifyData);
+                        if (normalizedIdentify) {
+                            for (let [id, memberData] of memberList) {
+                                const normalizedMemberName = normalizeHandle(memberData.name);
+                                if (normalizedMemberName && normalizedMemberName === normalizedIdentify) {
+                                    memberMatch = true;
+                                    memberMonths = memberData.months;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // 4. 用名稱完全匹配
+                    if (!memberMatch) {
+                        for (let [id, memberData] of memberList) {
+                            if (memberData.name === originalName || memberData.name === participant) {
+                                memberMatch = true;
+                                memberMonths = memberData.months;
+                                break;
+                            }
+                        }
+                    }
+
+                    // 5. 用正規化名稱匹配
+                    if (!memberMatch) {
+                        const normalizedOriginalName = normalizeHandle(originalName);
+                        const normalizedParticipant = normalizeHandle(participant);
+                        for (let [id, memberData] of memberList) {
+                            const normalizedMemberName = normalizeHandle(memberData.name);
+                            if (normalizedMemberName &&
+                                (normalizedMemberName === normalizedOriginalName ||
+                                    normalizedMemberName === normalizedParticipant)) {
+                                memberMatch = true;
+                                memberMonths = memberData.months;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!memberMatch || memberMonths < minMonths) return false;
+                }
+
+                // 留言驗證
+                if (enableComment && commenters.size > 0) {
+                    let commentMatch = false;
+
+                    const commenterResult = findCommenter(identifyData);
+                    if (commenterResult) {
+                        commentMatch = true;
+                    }
+
+                    if (!commentMatch) {
+                        for (let [id, commenter] of commenters) {
+                            if (commenter.name === originalName || commenter.name === participant) {
+                                commentMatch = true;
+                                break;
+                            }
+                            const normalizedCommenterName = normalizeHandle(commenter.name);
+                            const normalizedOriginalName = normalizeHandle(originalName);
+                            const normalizedParticipant = normalizeHandle(participant);
+                            if (normalizedCommenterName &&
+                                (normalizedCommenterName === normalizedOriginalName ||
+                                    normalizedCommenterName === normalizedParticipant)) {
+                                commentMatch = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if (!commentMatch) return false;
+                }
+
+                return true;
+            });
+        }
+
+        // 取得參與者的留言內容（如果有）
+        function getParticipantComment(participant) {
+            const data = participantDataMap.get(participant);
+            const identifyData = data?.identifyData || '';
+            const originalName = data?.originalName || participant;
+
+            // 使用 findCommenter 函數進行智慧比對
+            const commenterResult = findCommenter(identifyData);
+            if (commenterResult) {
+                return commenterResult.data.content;
+            }
+
+            // 用名稱查找（備用，包含正規化比對）
+            for (let [id, commenter] of commenters) {
+                if (commenter.name === originalName || commenter.name === participant) {
+                    return commenter.content;
+                }
+                // 正規化後相符
+                const normalizedCommenterName = normalizeHandle(commenter.name);
+                const normalizedOriginalName = normalizeHandle(originalName);
+                const normalizedParticipant = normalizeHandle(participant);
+                if (normalizedCommenterName &&
+                    (normalizedCommenterName === normalizedOriginalName ||
+                        normalizedCommenterName === normalizedParticipant)) {
+                    return commenter.content;
+                }
+            }
+
+            return null;
+        }
+
+        // 配色主題切換
+        function toggleTheme() {
+            const html = document.documentElement;
+            const themeToggle = document.getElementById('themeToggle');
+            const currentTheme = html.getAttribute('data-theme');
+
+            if (currentTheme === 'dark') {
+                html.removeAttribute('data-theme');
+                themeToggle.textContent = '☀️';
+            } else {
+                html.setAttribute('data-theme', 'dark');
+                themeToggle.textContent = '🌙';
+            }
+        }
+
+        // 切換模糊效果
+        function toggleBlur() {
+            const checkbox = document.getElementById('blurIdentifyData');
+            const textarea = document.getElementById('participantsIds');
+            textarea.classList.toggle('blurred', checkbox.checked);
+        }
+
+        // 關閉浮動視窗
+        function closeModal() {
+            document.getElementById('modalOverlay').classList.remove('active');
+        }
+
+        // 隱私保護：遮罩敏感資料
+        function maskPrivateData(data) {
+            if (!data) return '';
+            const emailRegex = /^([^@]+)@(.+)$/;
+            const emailMatch = data.match(emailRegex);
+
+            if (emailMatch) {
+                const localPart = emailMatch[1];
+                const domain = emailMatch[2];
+                const visibleChars = Math.min(2, localPart.length);
+                return localPart.substring(0, visibleChars) + '****@' + domain;
+            } else {
+                const visibleChars = Math.min(3, data.length);
+                return data.substring(0, visibleChars) + '****';
+            }
+        }
+
+        // 更新參與者顯示
+        function updateParticipantsDisplay() {
+            const namesTextarea = document.getElementById('participantsNames');
+            const idsTextarea = document.getElementById('participantsIds');
+            const checkBtn = document.getElementById('checkDuplicatesBtn');
+
+            const names = namesTextarea.value.split('\n').map(n => n.trim()).filter(n => n);
+            const ids = idsTextarea.value.split('\n').map(i => i.trim());
+
+            checkBtn.style.display = ids.some(id => id) ? 'inline-block' : 'none';
+
+            participantDataMap.clear();
+
+            participants = names.map((name, index) => {
+                const id = ids[index] || '';
+                const displayName = id ? `${name}(${maskPrivateData(id)})` : name;
+
+                participantDataMap.set(displayName, {
+                    originalName: name,
+                    identifyData: id,
+                    rowNumber: index + 1
+                });
+
+                return displayName;
+            });
+
+            const display = document.getElementById('participantsDisplay');
+            if (participants.length === 0) {
+                display.innerHTML = '<div class="empty-state">尚未輸入參與者</div>';
+            } else {
+                display.innerHTML = `
+                    <div class="participant-count">總參與人數: ${participants.length} 人</div>
+                    <div class="participants-list">
+                        ${participants.map(p => `<span class="participant-tag">${p}</span>`).join('')}
+                    </div>
+                `;
+            }
+
+            updatePrizeSelect();
+        }
+
+        // 檢查重複識別資料
+        function checkDuplicates() {
+            const ids = document.getElementById('participantsIds').value.split('\n').map(i => i.trim()).filter(i => i);
+
+            if (ids.length === 0) {
+                alert('沒有識別資料可檢查');
+                return;
+            }
+
+            const idMap = new Map();
+            const duplicates = new Map();
+
+            ids.forEach((id, index) => {
+                if (!id) return;
+                if (idMap.has(id)) {
+                    if (!duplicates.has(id)) {
+                        duplicates.set(id, [idMap.get(id) + 1]);
+                    }
+                    duplicates.get(id).push(index + 1);
+                } else {
+                    idMap.set(id, index);
+                }
+            });
+
+            const warningDiv = document.getElementById('duplicateWarning');
+
+            if (duplicates.size === 0) {
+                warningDiv.innerHTML = `
+                    <div style="background: rgba(133, 153, 0, 0.1); border: 2px solid var(--green); border-radius: 10px; padding: 15px; margin-top: 10px; color: var(--green);">
+                        ✓ 沒有發現重複的識別資料
+                    </div>
+                `;
+                setTimeout(() => { warningDiv.innerHTML = ''; }, 3000);
+                return;
+            }
+
+            let html = '<div class="duplicate-warning">';
+            html += '<strong>⚠️ 發現重複的識別資料:</strong><br><br>';
+
+            duplicates.forEach((rows, id) => {
+                html += `<div class="duplicate-item">識別資料: <strong>${id}</strong><br>出現在第 ${rows.join(', ')} 列</div>`;
+            });
+
+            html += '<br><button class="btn btn-danger" onclick="removeDuplicates()">移除重複項(保留第一筆)</button>';
+            html += '<button class="btn btn-secondary" onclick="closeDuplicateWarning()">取消</button>';
+            html += '</div>';
+
+            warningDiv.innerHTML = html;
+        }
+
+        function removeDuplicates() {
+            const namesTextarea = document.getElementById('participantsNames');
+            const idsTextarea = document.getElementById('participantsIds');
+
+            const names = namesTextarea.value.split('\n').map(n => n.trim());
+            const ids = idsTextarea.value.split('\n').map(i => i.trim());
+
+            const seenIds = new Set();
+            const newNames = [];
+            const newIds = [];
+
+            for (let i = 0; i < Math.max(names.length, ids.length); i++) {
+                const name = names[i] || '';
+                const id = ids[i] || '';
+
+                if (!id || !seenIds.has(id)) {
+                    if (id) seenIds.add(id);
+                    newNames.push(name);
+                    newIds.push(id);
+                }
+            }
+
+            namesTextarea.value = newNames.join('\n');
+            idsTextarea.value = newIds.join('\n');
+
+            closeDuplicateWarning();
+            updateParticipantsDisplay();
+            alert('已移除重複項,保留了第一筆資料');
+        }
+
+        function closeDuplicateWarning() {
+            document.getElementById('duplicateWarning').innerHTML = '';
+        }
+
+        // 新增獎項
+        function addPrize() {
+            const name = document.getElementById('prizeName').value.trim();
+            const quantity = parseInt(document.getElementById('prizeQuantity').value) || 1;
+
+            if (!name) {
+                alert('請輸入獎項名稱!');
+                return;
+            }
+
+            prizes.push({ name, quantity });
+            document.getElementById('prizeName').value = '';
+            document.getElementById('prizeQuantity').value = '1';
+
+            updatePrizesList();
+            updatePrizeSelect();
+        }
+
+        function updatePrizesList() {
+            const list = document.getElementById('prizesList');
+            if (prizes.length === 0) {
+                list.innerHTML = '<div class="empty-state">尚未新增獎項</div>';
+            } else {
+                const totalPrizes = prizes.reduce((sum, prize) => sum + prize.quantity, 0);
+                const avgRate = participants.length > 0
+                    ? (totalPrizes / participants.length * 100).toFixed(2)
+                    : '0.00';
+
+                let html = prizes.map((prize, index) => `
+                    <div class="prize-item">
+                        <div class="prize-info">
+                            <div class="prize-name">${prize.name}</div>
+                            <div class="prize-quantity">數量:${prize.quantity}</div>
+                        </div>
+                        <button class="btn btn-danger" onclick="removePrize(${index})">刪除</button>
+                    </div>
+                `).join('');
+
+                if (participants.length > 0) {
+                    html += `
+                        <div style="margin-top: 15px; padding: 10px; background: var(--bg-base); border-radius: 8px; border: 2px solid var(--primary);">
+                            <div style="color: var(--primary); font-weight: 600; font-size: 0.9rem;">
+                                📊 平均中獎率: ${avgRate}%
+                            </div>
+                            <div style="color: var(--fg-base); font-size: 0.85rem; margin-top: 5px;">
+                                (${totalPrizes}個獎項 / ${participants.length}位參與者)
+                            </div>
+                        </div>
+                    `;
+                }
+
+                list.innerHTML = html;
+            }
+        }
+
+        function removePrize(index) {
+            prizes.splice(index, 1);
+            winRates = winRates.filter(rate => rate.prizeIndex !== index);
+            winRates.forEach(rate => {
+                if (typeof rate.prizeIndex === 'number' && rate.prizeIndex > index) {
+                    rate.prizeIndex--;
+                }
+            });
+            updatePrizesList();
+            updatePrizeSelect();
+            updateRatesList();
+        }
+
+        function clearPrizes() {
+            if (prizes.length === 0) {
+                alert('獎項列表已經是空的');
+                return;
+            }
+            if (confirm('確定要清空所有獎項嗎?')) {
+                prizes = [];
+                winRates = [];
+                updatePrizesList();
+                updatePrizeSelect();
+                updateRatesList();
+            }
+        }
+
+        function generateSamplePrizes() {
+            prizes = [
+                { name: '特等獎 - 筆記型電腦', quantity: 1 },
+                { name: '頭獎 - 智慧手機', quantity: 2 },
+                { name: '二獎 - 平板電腦', quantity: 3 },
+                { name: '三獎 - 藍牙耳機', quantity: 5 },
+                { name: '參加獎 - 購物金', quantity: 10 }
+            ];
+            updatePrizesList();
+            updatePrizeSelect();
+        }
+
+        // 生成範例加權設定（動態百分點版）
+        function generateSampleWeights() {
+            if (participants.length === 0) {
+                alert('請先輸入參與者名單!');
+                return;
+            }
+
+            if (prizes.length === 0) {
+                alert('請先設定獎項!');
+                return;
+            }
+
+            const totalPrizes = prizes.reduce((sum, prize) => sum + prize.quantity, 0);
+            const baseRate = totalPrizes / participants.length;
+
+            const boostAmount = 0.10;
+            const zhuzhuTargetRate = Math.min(1.0, baseRate + boostAmount);
+            const ahtaiTargetRate = Math.max(0, baseRate - boostAmount);
+
+            const zhuzhuWeight = zhuzhuTargetRate / baseRate;
+            const ahtaiWeight = ahtaiTargetRate / baseRate;
+
+            const zhuzhuParticipants = participants.filter(p => {
+                const data = participantDataMap.get(p);
+                return data && data.originalName.includes('竹竹');
+            });
+
+            const ahtaiParticipants = participants.filter(p => {
+                const data = participantDataMap.get(p);
+                return data && (data.originalName.includes('Ah-Tai') ||
+                    (data.identifyData && data.identifyData.includes('Ah-Tai')));
+            });
+
+            let addedCount = 0;
+
+            zhuzhuParticipants.forEach(p => {
+                const existing = winRates.findIndex(rate =>
+                    rate.participant === p && rate.prizeIndex === 'all'
+                );
+
+                if (existing >= 0) {
+                    winRates[existing].percentage = zhuzhuWeight;
+                } else {
+                    winRates.push({
+                        participant: p,
+                        prizeIndex: 'all',
+                        prizeName: '全部獎項',
+                        percentage: zhuzhuWeight
+                    });
+                }
+                addedCount++;
+            });
+
+            ahtaiParticipants.forEach(p => {
+                const existing = winRates.findIndex(rate =>
+                    rate.participant === p && rate.prizeIndex === 'all'
+                );
+
+                if (existing >= 0) {
+                    winRates[existing].percentage = ahtaiWeight;
+                } else {
+                    winRates.push({
+                        participant: p,
+                        prizeIndex: 'all',
+                        prizeName: '全部獎項',
+                        percentage: ahtaiWeight
+                    });
+                }
+                addedCount++;
+            });
+
+            updateRatesList();
+
+            if (addedCount > 0) {
+                const zhuzhuRatePercent = (zhuzhuTargetRate * 100).toFixed(2);
+                const ahtaiRatePercent = (ahtaiTargetRate * 100).toFixed(2);
+                const baseRatePercent = (baseRate * 100).toFixed(2);
+
+                alert(`已設定動態加權（固定百分點模式）:\n\n` +
+                    `📊 基礎中獎率: ${baseRatePercent}%\n` +
+                    `🎋 竹竹目標: ${zhuzhuRatePercent}% (權重${zhuzhuWeight.toFixed(2)}x)\n` +
+                    `😎 Ah-Tai目標: ${ahtaiRatePercent}% (權重${ahtaiWeight.toFixed(2)}x)\n\n` +
+                    `共設定 ${addedCount} 筆`);
+            } else {
+                alert('名單中找不到"竹竹"或"Ah-Tai",無法設定範例加權');
+            }
+        }
+
+        function clearParticipants() {
+            const namesTextarea = document.getElementById('participantsNames');
+            const idsTextarea = document.getElementById('participantsIds');
+
+            if (!namesTextarea.value.trim() && !idsTextarea.value.trim()) {
+                alert('參與者名單已經是空的');
+                return;
+            }
+            if (confirm('確定要清空參與者名單嗎?')) {
+                namesTextarea.value = '';
+                idsTextarea.value = '';
+                participants = [];
+                winRates = [];
+                closeDuplicateWarning();
+                updateParticipantsDisplay();
+                updateRatesList();
+            }
+        }
+
+        function generateSampleParticipants() {
+            const sampleNames = [
+                '破渡', '小偉徐', '林玉涵', '鄭頤', '哈苦@草莓教',
+                '徐老師', '李建宏', '王宜蓓', '陳彥廷', '林欣妤',
+                '黃承恩', '劉詩涵', '蔡冠宇', '吳詠晴', '鄭宥廷',
+                '謝哲翔', '許柏翰', '徐柏宇', '賴子晴', '洪唯妤',
+                '楊羽彤', '竹竹', '范雅婷', 'Ah-Tai', '曹雅筠'
+            ];
+
+            const sampleIds = [
+                'podu@email.com', 'xiaowei123', 'linyuhan_ig', 'zhengyi_he', 'haku_berry',
+                'teacher_xu', 'lijian@mail.com', 'wangyi789', 'chenyan_ig', 'linxin@email.com',
+                'huang_chen', 'liushi456', 'tsaikuan_ig', 'wuyong@mail.com', 'zhengyou123',
+                'xiezhe@email.com', 'xuboh_ig', 'xuboy789', 'laizi@mail.com', 'hongwei_ig',
+                'yangyu123', 'zhuzhu_ig', 'fanya@email.com', 'ahtai@mail.com', 'caoya789'
+            ];
+
+            document.getElementById('participantsNames').value = sampleNames.join('\n');
+            document.getElementById('participantsIds').value = sampleIds.join('\n');
+            updateParticipantsDisplay();
+        }
+
+        function updatePrizeSelect() {
+            const select = document.getElementById('ratePrize');
+            select.innerHTML = '<option value="all">全部獎項</option>';
+            prizes.forEach((prize, index) => {
+                select.innerHTML += `<option value="${index}">${prize.name}</option>`;
+            });
+        }
+
+        function addWinRate() {
+            const participant = document.getElementById('rateParticipant').value.trim();
+            const prizeSelect = document.getElementById('ratePrize');
+            const prizeValue = prizeSelect.value;
+            const percentage = parseFloat(document.getElementById('ratePercentage').value);
+
+            if (!participant) {
+                alert('請輸入參與者名稱!');
+                return;
+            }
+
+            if (!participants.includes(participant)) {
+                alert('此參與者不在參與者列表中!');
+                return;
+            }
+
+            if (isNaN(percentage) || percentage < 0) {
+                alert('加權倍率必須大於等於 0!');
+                return;
+            }
+
+            const prizeName = prizeValue === 'all' ? '全部獎項' : prizes[parseInt(prizeValue)].name;
+            const prizeIndex = prizeValue === 'all' ? 'all' : parseInt(prizeValue);
+
+            const existingIndex = winRates.findIndex(rate =>
+                rate.participant === participant && rate.prizeIndex === prizeIndex
+            );
+
+            if (existingIndex >= 0) {
+                if (confirm('此設定已存在,是否更新?')) {
+                    winRates[existingIndex].percentage = percentage;
+                }
+            } else {
+                winRates.push({
+                    participant,
+                    prizeIndex,
+                    prizeName,
+                    percentage
+                });
+            }
+
+            document.getElementById('rateParticipant').value = '';
+            document.getElementById('ratePercentage').value = '2';
+            updateRatesList();
+        }
+
+        function updateRatesList() {
+            const list = document.getElementById('ratesList');
+
+            if (winRates.length === 0) {
+                list.innerHTML = '<div class="empty-state">尚未設定加權（可跳過此步驟）</div>';
+            } else {
+                list.innerHTML = winRates.map((rate, index) => `
+                    <div class="rate-item">
+                        <div class="rate-info">
+                            <span class="rate-participant">${rate.participant}</span>
+                            <div class="rate-details">${rate.prizeName}:${rate.percentage}x</div>
+                        </div>
+                        <button class="btn btn-danger" onclick="removeRate(${index})">刪除</button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function removeRate(index) {
+            winRates.splice(index, 1);
+            updateRatesList();
+        }
+
+        // 自動完成功能
+        function setupAutocomplete() {
+            const input = document.getElementById('rateParticipant');
+            let currentFocus = -1;
+
+            input.addEventListener('input', function () {
+                const val = this.value;
+                closeAllLists();
+                if (!val) return;
+                currentFocus = -1;
+
+                const wrapper = this.parentNode;
+                const list = document.createElement('div');
+                list.setAttribute('class', 'autocomplete-items');
+                wrapper.appendChild(list);
+
+                participants.forEach(participant => {
+                    if (participant.toLowerCase().includes(val.toLowerCase())) {
+                        const item = document.createElement('div');
+                        const index = participant.toLowerCase().indexOf(val.toLowerCase());
+                        item.innerHTML = participant.substr(0, index);
+                        item.innerHTML += '<strong>' + participant.substr(index, val.length) + '</strong>';
+                        item.innerHTML += participant.substr(index + val.length);
+                        item.innerHTML += '<input type="hidden" value="' + participant + '">';
+
+                        item.addEventListener('click', function () {
+                            input.value = this.getElementsByTagName('input')[0].value;
+                            closeAllLists();
+                        });
+                        list.appendChild(item);
+                    }
+                });
+            });
+
+            input.addEventListener('keydown', function (e) {
+                let list = this.parentNode.querySelector('.autocomplete-items');
+                if (list) list = list.getElementsByTagName('div');
+
+                if (e.keyCode === 40) {
+                    currentFocus++;
+                    addActive(list);
+                } else if (e.keyCode === 38) {
+                    currentFocus--;
+                    addActive(list);
+                } else if (e.keyCode === 13) {
+                    e.preventDefault();
+                    if (currentFocus > -1 && list) {
+                        list[currentFocus].click();
+                    }
+                }
+            });
+
+            function addActive(list) {
+                if (!list) return;
+                removeActive(list);
+                if (currentFocus >= list.length) currentFocus = 0;
+                if (currentFocus < 0) currentFocus = list.length - 1;
+                list[currentFocus].classList.add('autocomplete-active');
+            }
+
+            function removeActive(list) {
+                for (let i = 0; i < list.length; i++) {
+                    list[i].classList.remove('autocomplete-active');
+                }
+            }
+
+            function closeAllLists(element) {
+                const items = document.getElementsByClassName('autocomplete-items');
+                for (let i = 0; i < items.length; i++) {
+                    if (element !== items[i] && element !== input) {
+                        items[i].parentNode.removeChild(items[i]);
+                    }
+                }
+            }
+
+            document.addEventListener('click', function (e) {
+                closeAllLists(e.target);
+            });
+        }
+
+        // 開始抽獎
+        function startDraw() {
+            if (participants.length === 0) {
+                alert('請先輸入參與者名單!');
+                goToStep(3);
+                return;
+            }
+
+            if (prizes.length === 0) {
+                alert('請先設定至少一個獎項!');
+                goToStep(4);
+                return;
+            }
+
+            const totalPrizes = prizes.reduce((sum, prize) => sum + prize.quantity, 0);
+            if (totalPrizes > participants.length) {
+                alert(`獎項總數 (${totalPrizes}) 超過參與者人數 (${participants.length})!`);
+                return;
+            }
+
+            showLoadingAnimation();
+        }
+
+        function showLoadingAnimation() {
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            const countdownEl = document.getElementById('countdown');
+
+            loadingOverlay.classList.add('active');
+
+            let count = 3;
+            countdownEl.textContent = count;
+
+            const countdownInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownEl.textContent = count;
+                } else {
+                    clearInterval(countdownInterval);
+                    countdownEl.textContent = '🎊';
+                }
+            }, 1000);
+
+            setTimeout(() => {
+                performDraw();
+                loadingOverlay.classList.remove('active');
+            }, 3500);
+        }
+
+        // 執行抽獎（加權系統）
+        function performDraw() {
+            results = prizes.map(prize => ({
+                prize: prize.name,
+                winners: []
+            }));
+
+            // 使用符合資格的參與者進行抽獎
+            let availableParticipants = getQualifiedParticipants();
+            const drawLog = [];
+            drawLog.push('🎊 開始加權抽獎流程...\n');
+            drawLog.push(`👥 符合資格參與者：${availableParticipants.length} 人\n`);
+
+            function weightedRandomPick(participants, prizeIndex) {
+                if (participants.length === 0) return null;
+
+                const weights = participants.map(p => {
+                    const specificRate = winRates.find(rate =>
+                        rate.participant === p && rate.prizeIndex === prizeIndex
+                    );
+                    if (specificRate) return specificRate.percentage;
+
+                    const allRate = winRates.find(rate =>
+                        rate.participant === p && rate.prizeIndex === 'all'
+                    );
+                    if (allRate) return allRate.percentage;
+
+                    return 1;
+                });
+
+                const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+                if (totalWeight === 0) return null;
+
+                let random = Math.random() * totalWeight;
+                for (let i = 0; i < participants.length; i++) {
+                    random -= weights[i];
+                    if (random <= 0) {
+                        return { index: i, weight: weights[i] };
+                    }
+                }
+
+                return { index: participants.length - 1, weight: weights[participants.length - 1] };
+            }
+
+            prizes.forEach((prize, prizeIndex) => {
+                drawLog.push(`\n🏆 抽取獎項:${prize.name} (共${prize.quantity}個)`);
+
+                const prizeWeights = winRates.filter(rate =>
+                    rate.prizeIndex === prizeIndex || rate.prizeIndex === 'all'
+                );
+                if (prizeWeights.length > 0) {
+                    drawLog.push(`📊 加權設定:`);
+                    prizeWeights.forEach(w => {
+                        const targetPrize = w.prizeIndex === 'all' ? '全部獎項' : prizes[w.prizeIndex].name;
+                        drawLog.push(`   ${w.participant}: ${w.percentage}x (${targetPrize})`);
+                    });
+                }
+
+                for (let i = 0; i < prize.quantity; i++) {
+                    const eligibleParticipants = availableParticipants.filter(p => {
+                        const alreadyWon = results.some(r =>
+                            r.winners.some(w => (typeof w === 'string' ? w : w.name) === p)
+                        );
+                        if (alreadyWon) return false;
+
+                        const specificRate = winRates.find(rate =>
+                            rate.participant === p && rate.prizeIndex === prizeIndex
+                        );
+                        if (specificRate && specificRate.percentage === 0) return false;
+
+                        const allRate = winRates.find(rate =>
+                            rate.participant === p && rate.prizeIndex === 'all'
+                        );
+                        if (allRate && allRate.percentage === 0) return false;
+
+                        return true;
+                    });
+
+                    if (eligibleParticipants.length === 0) {
+                        drawLog.push(`⚠️ 沒有合格參與者,停止抽取`);
+                        break;
+                    }
+
+                    const result = weightedRandomPick(eligibleParticipants, prizeIndex);
+                    if (result === null) {
+                        drawLog.push(`⚠️ 抽取失敗`);
+                        break;
+                    }
+
+                    const winner = eligibleParticipants[result.index];
+                    results[prizeIndex].winners.push(winner);
+
+                    const removeIndex = availableParticipants.indexOf(winner);
+                    if (removeIndex > -1) {
+                        availableParticipants.splice(removeIndex, 1);
+                    }
+
+                    const weightInfo = result.weight !== 1 ? ` [權重: ${result.weight}x]` : '';
+                    drawLog.push(`✅ ${winner}${weightInfo} 獲得 ${prize.name}`);
+                }
+            });
+
+            results = results.filter(result => result.winners.length > 0);
+            lastDrawLog = drawLog;
+            displayResults(drawLog);
+        }
+
+        // 顯示抽獎結果
+        function displayResults(drawLog = []) {
+            if (!drawLog || drawLog.length === 0) {
+                drawLog = lastDrawLog;
+            }
+
+            const theme = document.getElementById('theme').value || '抽獎活動';
+
+            let html = `
+                <div class="results-section">
+                    <h2 class="results-title">🎊 「${theme}」抽獎結果 🎊</h2>
+            `;
+
+            if (drawLog && drawLog.length > 0) {
+                html += `
+                    <div style="margin-bottom: 25px;">
+                        <button id="logToggleBtn" onclick="toggleDrawLog()" style="background: rgba(255,255,255,0.2); border: 2px solid rgba(255,255,255,0.4); color: white; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 500;">
+                            📋 查看抽獎過程記錄 (點擊展開)
+                        </button>
+                        <div id="drawLogContainer" style="display: none; background: rgba(255,255,255,0.15); padding: 20px; border-radius: 10px; margin-top: 15px; border: 2px solid rgba(255,255,255,0.3);">
+                            <div style="background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; font-family: monospace; font-size: 0.95rem; max-height: 400px; overflow-y: auto; color: #f8f9fa; line-height: 1.4;">
+                                ${drawLog.map(log => `<div style="margin-bottom: 5px; padding: 2px 0;">${log}</div>`).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            if (results.length === 0) {
+                html += '<div class="empty-state" style="color: white;">抽獎出現問題,請重新嘗試</div>';
+            } else {
+                results.forEach((result, prizeIndex) => {
+                    html += `
+                        <div class="result-item">
+                            <div class="result-prize">🏆 ${result.prize}</div>
+                            <div class="result-winners">
+                                ${result.winners.map((winner, winnerIndex) => {
+                        if (typeof winner === 'object' && winner.isVacancy) {
+                            return `<span class="winner-tag" style="background: rgba(220,50,47,0.3); border: 2px dashed var(--red);">
+                                            [空缺]
+                                        </span>`;
+                        }
+
+                        const winnerName = typeof winner === 'string' ? winner : winner.name;
+                        const isFilled = typeof winner === 'object' && winner.isFilled;
+                        const rowInfo = participantDataMap.get(winnerName);
+                        const rowText = rowInfo && rowInfo.rowNumber ? ` (第${rowInfo.rowNumber}列)` : '';
+                        const escapedWinner = winnerName.replace(/'/g, "\\'");
+                        const bgColor = isFilled ? 'background: rgba(133,153,0,0.6); border: 2px solid var(--green);' : '';
+
+                        // 取得留言內容（如果有）
+                        const comment = getParticipantComment(winnerName);
+                        const commentHtml = comment ? `<div style="font-size: 0.8rem; margin-top: 5px; color: var(--fg-base); font-style: italic;">💬 「${comment.substring(0, 50)}${comment.length > 50 ? '...' : ''}」</div>` : '';
+
+                        return `<div class="winner-tag" style="position: relative; padding-right: 30px; ${bgColor}">
+                                        <span>${winnerName}${rowText}</span>
+                                        ${commentHtml}
+                                        <button onclick="excludeWinner('${escapedWinner}', ${prizeIndex}, ${winnerIndex})" style="position: absolute; top: -5px; right: -5px; background: var(--red); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 12px; cursor: pointer; line-height: 1; padding: 0;">✕</button>
+                                    </div>`;
+                    }).join('')}
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += `
+                    <div style="text-align: center; margin-top: 20px;">
+                        <button class="btn btn-secondary" onclick="closeModal()">關閉</button>
+                        <button class="btn btn-primary" onclick="exportResults()">匯出結果</button>
+                        <button class="btn btn-secondary" onclick="redraw()">再抽一次</button>
+                        <button class="btn btn-secondary" onclick="fillVacancies()">補抽缺額</button>
+                    </div>
+                `;
+            }
+
+            html += '</div>';
+
+            document.getElementById('modalResults').innerHTML = html;
+            document.getElementById('modalOverlay').classList.add('active');
+            updateViewLastResultBtn();
+        }
+
+        // 匯出結果
+        function exportResults() {
+            const theme = document.getElementById('theme').value || '抽獎活動';
+            let text = `${theme} - 抽獎結果\n`;
+            text += `抽獎時間: ${new Date().toLocaleString('zh-TW')}\n\n`;
+
+            if (winRates.length > 0) {
+                text += `特殊中獎率設定:\n`;
+                winRates.forEach(rate => {
+                    text += `  ${rate.participant} - ${rate.prizeName}: ${rate.percentage}x\n`;
+                });
+                text += '\n';
+            }
+
+            text += `抽獎結果:\n`;
+            results.forEach(result => {
+                text += `${result.prize}:\n`;
+                result.winners.forEach((winner, index) => {
+                    if (typeof winner === 'object' && winner.isVacancy) {
+                        text += `  ${index + 1}. [空缺]\n`;
+                        return;
+                    }
+
+                    const winnerName = typeof winner === 'string' ? winner : winner.name;
+                    const isFilled = typeof winner === 'object' && winner.isFilled;
+
+                    const specialRate = winRates.find(rate => rate.participant === winnerName);
+                    const rateInfo = specialRate ? ` (加權: ${specialRate.percentage}x)` : '';
+                    const filledTag = isFilled ? ' [補抽]' : '';
+
+                    const rowInfo = participantDataMap.get(winnerName);
+                    let fullInfo = winnerName;
+                    let idInfo = '';
+                    let rowText = '';
+
+                    if (rowInfo) {
+                        fullInfo = rowInfo.originalName;
+                        if (rowInfo.identifyData) {
+                            idInfo = `\t${rowInfo.identifyData}`;
+                        }
+                        if (rowInfo.rowNumber) {
+                            rowText = ` (第${rowInfo.rowNumber}列)`;
+                        }
+                    }
+
+                    text += `  ${index + 1}. ${fullInfo}${idInfo}${rowText}${filledTag}${rateInfo}\n`;
+                });
+                text += '\n';
+            });
+
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${theme}_抽獎結果_${new Date().toISOString().slice(0, 10)}.txt`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function redraw() {
+            closeModal();
+            setTimeout(() => startDraw(), 100);
+        }
+
+        function excludeWinner(winnerName, prizeIndex, winnerIndex) {
+            if (results[prizeIndex] && results[prizeIndex].winners[winnerIndex]) {
+                results[prizeIndex].winners[winnerIndex] = {
+                    isVacancy: true,
+                    originalName: winnerName
+                };
+            }
+
+            const existing = winRates.find(rate =>
+                rate.participant === winnerName && rate.prizeIndex === 'all'
+            );
+
+            if (!existing) {
+                winRates.push({
+                    participant: winnerName,
+                    prizeIndex: 'all',
+                    prizeName: '全部獎項',
+                    percentage: 0
+                });
+            } else {
+                existing.percentage = 0;
+            }
+
+            updateRatesList();
+            displayResults([]);
+        }
+
+        function fillVacancies() {
+            let hasVacancy = false;
+            results.forEach(result => {
+                if (result.winners.some(w => typeof w === 'object' && w.isVacancy)) {
+                    hasVacancy = true;
+                }
+            });
+
+            if (!hasVacancy) {
+                alert('沒有空缺需要補抽');
+                return;
+            }
+
+            const miniLoading = document.getElementById('miniLoading');
+            miniLoading.classList.add('active');
+
+            setTimeout(() => {
+                performFillVacancies();
+                miniLoading.classList.remove('active');
+            }, 2000);
+        }
+
+        function performFillVacancies() {
+            const existingWinners = [];
+            results.forEach(result => {
+                result.winners.forEach(w => {
+                    if (typeof w === 'string') {
+                        existingWinners.push(w);
+                    } else if (typeof w === 'object' && !w.isVacancy) {
+                        existingWinners.push(w.name);
+                    }
+                });
+            });
+
+            // 使用符合資格的參與者進行補抽
+            let availableParticipants = getQualifiedParticipants().filter(p => !existingWinners.includes(p));
+
+            availableParticipants = availableParticipants.filter(p => {
+                return !winRates.some(rate =>
+                    rate.participant === p && rate.percentage === 0
+                );
+            });
+
+            results.forEach((result, prizeIndex) => {
+                result.winners = result.winners.map(winner => {
+                    if (typeof winner === 'object' && winner.isVacancy) {
+                        if (availableParticipants.length > 0) {
+                            const randomIndex = Math.floor(Math.random() * availableParticipants.length);
+                            const newWinner = availableParticipants.splice(randomIndex, 1)[0];
+                            return { name: newWinner, isFilled: true };
+                        }
+                        return winner;
+                    }
+                    return winner;
+                });
+            });
+
+            displayResults([]);
+        }
+
+        function toggleDrawLog() {
+            const button = event.target;
+            const container = button.parentElement.querySelector('#drawLogContainer');
+
+            if (!container) return;
+
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                button.textContent = '📋 隱藏抽獎過程記錄 (點擊收合)';
+            } else {
+                container.style.display = 'none';
+                button.textContent = '📋 查看抽獎過程記錄 (點擊展開)';
+            }
+        }
+
+        // 查看上次抽獎結果
+        function viewLastResult() {
+            if (results.length === 0) {
+                alert('沒有上次的抽獎結果');
+                return;
+            }
+            displayResults(lastDrawLog);
+        }
+
+        // 更新查看結果按鈕的顯示狀態
+        function updateViewLastResultBtn() {
+            const btn = document.getElementById('viewLastResultBtn');
+            if (btn) {
+                btn.style.display = results.length > 0 ? 'inline-block' : 'none';
+            }
+        }
+
+        // ==================== 步驟 3：會員限制功能 ====================
+
+        // 切換條件區塊顯示
+        function toggleConditionSection(type) {
+            // CSS :has() 會自動處理顯示，這裡只是備用
+            const typeCapitalized = type.charAt(0).toUpperCase() + type.slice(1);
+            const checkbox = document.getElementById(`enable${typeCapitalized}Check`);
+            const content = document.getElementById(`${type}CheckContent`);
+            if (content) {
+                content.style.display = checkbox.checked ? 'block' : 'none';
+            }
+
+            // 如果取消勾選，清除該條件的相關資料
+            if (!checkbox.checked) {
+                switch (type) {
+                    case 'form':
+                        // 取消勾選時清除表單資料
+                        formParticipants.clear();
+                        formCsvData = [];
+                        document.getElementById('formCsvFile').value = '';
+                        document.getElementById('formCsvFileName').textContent = '';
+                        document.getElementById('formCsvPreview').style.display = 'none';
+                        document.getElementById('formImportResult').style.display = 'none';
+                        break;
+                    case 'member':
+                        // 取消勾選時清除會員資料
+                        memberList.clear();
+                        memberCsvData = [];
+                        document.getElementById('memberCsvFile').value = '';
+                        document.getElementById('memberCsvFileName').textContent = '';
+                        document.getElementById('memberCsvPreview').style.display = 'none';
+                        document.getElementById('memberImportResult').style.display = 'none';
+                        break;
+                    case 'comment':
+                        // 取消勾選時清除留言資料
+                        commenters.clear();
+                        document.getElementById('commentJsonInput').value = '';
+                        document.getElementById('commentParseResult').style.display = 'none';
+                        break;
+                }
+            }
+
+            // 更新資格驗證摘要（取消勾選時隱藏/更新統計）
+            updateQualificationSummary();
+        }
+
+        // ========== 表單驗證功能 ==========
+        function resetFormCsvAndSelect() {
+            // 重設狀態以允許重選相同檔案
+            const fileInput = document.getElementById('formCsvFile');
+            fileInput.value = '';
+            formCsvData = [];
+            document.getElementById('formCsvPreview').style.display = 'none';
+            document.getElementById('formCsvFileName').textContent = '';
+            document.getElementById('formImportResult').style.display = 'none';
+            fileInput.click();
+        }
+
+        function previewFormCsv() {
+            const fileInput = document.getElementById('formCsvFile');
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            document.getElementById('formCsvFileName').textContent = file.name;
+
+            readFileWithEncoding(file, function (content) {
+                formCsvData = parseCSV(content);
+
+                if (formCsvData.length === 0) {
+                    alert('無法解析 CSV 檔案');
+                    return;
+                }
+
+                updateFormCsvColumnSelects();
+                document.getElementById('formCsvPreview').style.display = 'block';
+                document.getElementById('formImportResult').style.display = 'none';
+                updateFormCsvPreview();
+            });
+        }
+
+        function updateFormCsvColumnSelects(preserveSelection = false) {
+            const hasHeader = document.getElementById('formCsvHasHeader').checked;
+            const firstRow = formCsvData[0] || [];
+            const nameSelect = document.getElementById('formCsvNameCol');
+            const idSelect = document.getElementById('formCsvIdCol');
+
+            // 保存當前選擇
+            const savedNameIdx = nameSelect.value || '0';
+            const savedIdIdx = idSelect.value || '0';
+
+            nameSelect.innerHTML = '';
+            idSelect.innerHTML = '';
+
+            firstRow.forEach((col, index) => {
+                const label = hasHeader ? col : `欄位 ${index + 1}`;
+                nameSelect.innerHTML += `<option value="${index}">${label}</option>`;
+                idSelect.innerHTML += `<option value="${index}">${label}</option>`;
+            });
+
+            // 恢復選擇或設定預設值
+            if (preserveSelection) {
+                nameSelect.value = savedNameIdx;
+                idSelect.value = savedIdIdx;
+            } else if (firstRow.length > 1) {
+                // 首次載入時的預設選擇
+                idSelect.value = '1';
+            }
+        }
+
+        function updateFormCsvPreview() {
+            updateFormCsvColumnSelects(true);
+
+            const hasHeader = document.getElementById('formCsvHasHeader').checked;
+            const nameColIdx = parseInt(document.getElementById('formCsvNameCol').value) || 0;
+            const idColIdx = parseInt(document.getElementById('formCsvIdCol').value) || 0;
+
+            const startRow = hasHeader ? 1 : 0;
+            const previewRows = formCsvData.slice(startRow, startRow + 5);
+
+            let html = '<table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">';
+            html += '<tr style="background: var(--bg-highlight);"><th style="padding: 8px; text-align: left; border-bottom: 1px solid var(--fg-base);">人名</th><th style="padding: 8px; text-align: left; border-bottom: 1px solid var(--fg-base);">唯一識別</th></tr>';
+
+            previewRows.forEach(row => {
+                const name = row[nameColIdx] || '';
+                const id = row[idColIdx] || '';
+                html += `<tr><td style="padding: 6px;">${name}</td><td style="padding: 6px;">${id}</td></tr>`;
+            });
+
+            html += '</table>';
+            if (formCsvData.length > (hasHeader ? 6 : 5)) {
+                html += `<div style="text-align: center; color: var(--fg-base); margin-top: 5px;">... 共 ${formCsvData.length - (hasHeader ? 1 : 0)} 筆資料</div>`;
+            }
+
+            document.getElementById('formCsvPreviewTable').innerHTML = html;
+        }
+
+        function importFormCsv() {
+            const hasHeader = document.getElementById('formCsvHasHeader').checked;
+            const nameColIdx = parseInt(document.getElementById('formCsvNameCol').value) || 0;
+            const idColIdx = parseInt(document.getElementById('formCsvIdCol').value) || 0;
+
+            formParticipants.clear();
+            const startRow = hasHeader ? 1 : 0;
+
+            for (let i = startRow; i < formCsvData.length; i++) {
+                const row = formCsvData[i];
+                const name = (row[nameColIdx] || '').trim();
+                const id = (row[idColIdx] || '').trim();
+
+                if (name && id) {
+                    if (!formParticipants.has(id)) {
+                        formParticipants.set(id, { name, rowNumber: i + 1 });
+                    }
+                }
+            }
+
+            document.getElementById('formCsvPreview').style.display = 'none';
+            document.getElementById('formImportResult').style.display = 'block';
+            document.getElementById('formImportStats').innerHTML = `共匯入 <strong>${formParticipants.size}</strong> 位表單參加者`;
+
+            updateQualificationSummary();
+        }
+
+        function cancelFormCsv() {
+            document.getElementById('formCsvPreview').style.display = 'none';
+            document.getElementById('formCsvFile').value = '';
+            document.getElementById('formCsvFileName').textContent = '';
+            formCsvData = [];
+        }
+
+        function clearFormData() {
+            formParticipants.clear();
+            formCsvData = [];
+            document.getElementById('formCsvFile').value = '';
+            document.getElementById('formCsvFileName').textContent = '';
+            document.getElementById('formImportResult').style.display = 'none';
+            updateQualificationSummary();
+        }
+
+        function checkFormDuplicates() {
+            const hasHeader = document.getElementById('formCsvHasHeader').checked;
+            const idColIdx = parseInt(document.getElementById('formCsvIdCol').value) || 0;
+            const startRow = hasHeader ? 1 : 0;
+
+            const idCounts = new Map();
+            for (let i = startRow; i < formCsvData.length; i++) {
+                const id = (formCsvData[i][idColIdx] || '').trim();
+                if (id) {
+                    idCounts.set(id, (idCounts.get(id) || 0) + 1);
+                }
+            }
+
+            const duplicates = Array.from(idCounts.entries()).filter(([id, count]) => count > 1);
+
+            if (duplicates.length === 0) {
+                alert('沒有發現重複的識別資料！');
+            } else {
+                let msg = `發現 ${duplicates.length} 個重複的識別資料：\n\n`;
+                duplicates.slice(0, 5).forEach(([id, count]) => {
+                    msg += `• "${id}" 出現 ${count} 次\n`;
+                });
+                if (duplicates.length > 5) {
+                    msg += `... 還有 ${duplicates.length - 5} 個\n`;
+                }
+                msg += '\n匯入時會自動保留第一筆，移除重複項。';
+                alert(msg);
+            }
+        }
+
+        // ========== 會員驗證功能 ==========
+        function resetMemberCsvAndSelect() {
+            // 重設狀態以允許重選相同檔案
+            const fileInput = document.getElementById('memberCsvFile');
+            fileInput.value = '';
+            memberCsvData = [];
+            document.getElementById('memberCsvPreview').style.display = 'none';
+            document.getElementById('memberCsvFileName').textContent = '';
+            document.getElementById('memberImportResult').style.display = 'none';
+            fileInput.click();
+        }
+
+        function previewMemberCsv() {
+            const fileInput = document.getElementById('memberCsvFile');
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            document.getElementById('memberCsvFileName').textContent = file.name;
+
+            readFileWithEncoding(file, function (content) {
+                memberCsvData = parseCSV(content);
+
+                if (memberCsvData.length === 0) {
+                    alert('無法解析 CSV 檔案');
+                    return;
+                }
+
+                updateMemberCsvColumnSelects();
+                document.getElementById('memberCsvPreview').style.display = 'block';
+                document.getElementById('memberImportResult').style.display = 'none';
+                updateMemberCsvPreview();
+            });
+        }
+
+        function updateMemberCsvColumnSelects(preserveSelection = false) {
+            const hasHeader = document.getElementById('memberCsvHasHeader').checked;
+            const firstRow = memberCsvData[0] || [];
+            const nameSelect = document.getElementById('memberCsvNameCol');
+            const urlSelect = document.getElementById('memberCsvUrlCol');
+            const durationSelect = document.getElementById('memberCsvDurationCol');
+
+            // 保存當前選擇
+            const savedNameIdx = nameSelect.value || '0';
+            const savedUrlIdx = urlSelect.value || '0';
+            const savedDurationIdx = durationSelect.value || '0';
+
+            nameSelect.innerHTML = '';
+            urlSelect.innerHTML = '';
+            durationSelect.innerHTML = '';
+
+            firstRow.forEach((col, index) => {
+                const label = hasHeader ? col : `欄位 ${index + 1}`;
+                nameSelect.innerHTML += `<option value="${index}">${label}</option>`;
+                urlSelect.innerHTML += `<option value="${index}">${label}</option>`;
+                durationSelect.innerHTML += `<option value="${index}">${label}</option>`;
+            });
+
+            // 恢復選擇或自動偵測
+            if (preserveSelection) {
+                nameSelect.value = savedNameIdx;
+                urlSelect.value = savedUrlIdx;
+                durationSelect.value = savedDurationIdx;
+            } else if (hasHeader) {
+                // 首次載入時，嘗試自動選擇正確的欄位
+                firstRow.forEach((col, index) => {
+                    const lowerCol = col.toLowerCase();
+                    if (lowerCol.includes('name') || lowerCol.includes('名')) nameSelect.value = index;
+                    if (lowerCol.includes('url') || lowerCol.includes('profile') || lowerCol.includes('連結')) urlSelect.value = index;
+                    if (lowerCol.includes('time') || lowerCol.includes('duration') || lowerCol.includes('時長')) durationSelect.value = index;
+                });
+            }
+        }
+
+        function updateMemberCsvPreview() {
+            updateMemberCsvColumnSelects(true);
+
+            const hasHeader = document.getElementById('memberCsvHasHeader').checked;
+            const nameColIdx = parseInt(document.getElementById('memberCsvNameCol').value) || 0;
+            const urlColIdx = parseInt(document.getElementById('memberCsvUrlCol').value) || 0;
+            const durationColIdx = parseInt(document.getElementById('memberCsvDurationCol').value) || 0;
+
+            const startRow = hasHeader ? 1 : 0;
+            const previewRows = memberCsvData.slice(startRow, startRow + 5);
+
+            let html = '<table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">';
+            html += '<tr style="background: var(--bg-highlight);"><th style="padding: 8px; text-align: left;">名稱</th><th style="padding: 8px; text-align: left;">頻道 ID</th><th style="padding: 8px; text-align: left;">會員時長</th></tr>';
+
+            previewRows.forEach(row => {
+                const name = row[nameColIdx] || '';
+                const url = row[urlColIdx] || '';
+                const channelId = extractChannelId(url);
+                const duration = row[durationColIdx] || '';
+                const months = parseMemberDuration(duration);
+
+                html += `<tr>
+                    <td style="padding: 6px;">${name}</td>
+                    <td style="padding: 6px; font-family: monospace; font-size: 0.8rem;">${channelId || '(無法提取)'}</td>
+                    <td style="padding: 6px;">${duration} ${months !== null ? `(${months}個月)` : ''}</td>
+                </tr>`;
+            });
+
+            html += '</table>';
+            document.getElementById('memberCsvPreviewTable').innerHTML = html;
+        }
+
+        function importMemberCsv() {
+            const hasHeader = document.getElementById('memberCsvHasHeader').checked;
+            const nameColIdx = parseInt(document.getElementById('memberCsvNameCol').value) || 0;
+            const urlColIdx = parseInt(document.getElementById('memberCsvUrlCol').value) || 0;
+            const durationColIdx = parseInt(document.getElementById('memberCsvDurationCol').value) || 0;
+            const minMonths = parseInt(document.getElementById('memberMinMonths').value) || 0;
+
+            memberList.clear();
+            const startRow = hasHeader ? 1 : 0;
+
+            for (let i = startRow; i < memberCsvData.length; i++) {
+                const row = memberCsvData[i];
+                const name = (row[nameColIdx] || '').trim();
+                const url = (row[urlColIdx] || '').trim();
+                const duration = (row[durationColIdx] || '').trim();
+                const channelId = extractChannelId(url);
+                const months = parseMemberDuration(duration);
+
+                if (channelId && !memberList.has(channelId)) {
+                    memberList.set(channelId, {
+                        name,
+                        url,
+                        months: months || 0
+                    });
+                }
+            }
+
+            // 匯入後再計算符合條件的人數
+            let qualifiedCount = 0;
+            memberList.forEach(m => {
+                if (m.months >= minMonths) qualifiedCount++;
+            });
+
+            document.getElementById('memberCsvPreview').style.display = 'none';
+            document.getElementById('memberImportResult').style.display = 'block';
+            document.getElementById('memberImportStats').innerHTML = `
+                共匯入 <strong>${memberList.size}</strong> 位會員（不重複）<br>
+                符合 ${minMonths} 個月以上條件：<strong>${qualifiedCount}</strong> 位
+            `;
+
+            updateQualificationSummary();
+        }
+
+        function cancelMemberCsv() {
+            document.getElementById('memberCsvPreview').style.display = 'none';
+            document.getElementById('memberCsvFile').value = '';
+            document.getElementById('memberCsvFileName').textContent = '';
+            memberCsvData = [];
+        }
+
+        function clearMemberData() {
+            memberList.clear();
+            memberCsvData = [];
+            document.getElementById('memberCsvFile').value = '';
+            document.getElementById('memberCsvFileName').textContent = '';
+            document.getElementById('memberImportResult').style.display = 'none';
+            updateQualificationSummary();
+        }
+
+        /**
+         * 初始化 Google API 用戶端
+         */
+        function gapiLoaded() {
+            gapi.load('client', async () => {
+                await gapi.client.init({
+                    // 初始可留空，等按按鈕時再抓
+                    discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/youtube/v3/rest'],
+                });
+                gapiInited = true;
+            });
+        }
+
+        /**
+         * 初始化 Google Identity Services (GIS)
+         */
+        function gisLoaded() {
+            // 延遲到點擊按鈕時才 initTokenClient，因為那時才有 Client ID
+            gisInited = true;
+        }
+
+        /**
+         * 點擊授權按鈕
+         */
+        function handleAuthClick() {
+            const clientId = USER_CONFIG.CLIENT_ID;
+            if (!clientId || clientId.includes('你的_CLIENT_ID')) {
+                alert('系統尚未讀取到有效的 OAuth Client ID，請在設定區或原始碼頂部補充！');
+                return;
+            }
+
+            // 初始化 tokenClient
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: USER_CONFIG.CLIENT_ID,
+                scope: USER_CONFIG.SCOPES,
+                callback: async (resp) => {
+                    if (resp.error !== undefined) throw (resp);
+
+                    // 更新所有授權文字
+                    const apiStatus = document.getElementById('api_status');
+                    const commentAuthStatus = document.getElementById('comment_auth_status');
+                    if (apiStatus) apiStatus.innerHTML = '✅ 已授權';
+                    if (commentAuthStatus) commentAuthStatus.innerHTML = '✅ 已授權';
+
+                    const btnSignout = document.getElementById('btn_signout');
+                    if (btnSignout) btnSignout.style.display = 'inline-block';
+
+                    // 只有在勾選會員驗證時才執行成員抓取
+                    if (document.getElementById('requireMember').checked) {
+                        await fetchAllMembers();
+                    } else {
+                        // 如果只是為了留言授權，提示已就緒
+                        const youtubeStatus = document.getElementById('youtubeApiStatus');
+                        if (youtubeStatus) youtubeStatus.innerHTML = '✅ 授權已就緒，請再次點擊「獲取留言」';
+                    }
+                },
+            });
+
+            // 建議維持 'select_account'，這樣您日後切換頻道主帳號測試時才不會卡住
+            if (gapi.client.getToken() === null) {
+                tokenClient.requestAccessToken({ prompt: 'select_account' });
+            } else {
+                tokenClient.requestAccessToken({ prompt: '' });
+            }
+        }
+
+        /**
+         * 遞迴抓取所有會員名單 (處理分頁)
+         */
+        async function fetchAllMembers() {
+            try {
+                memberList.clear();
+                let pageToken = "";
+                const minMonths = parseInt(document.getElementById('memberMinMonths').value) || 0;
+                document.getElementById('api_status').innerText = '⏳ 正在讀取資料...';
+
+                do {
+                    const response = await gapi.client.youtube.members.list({
+                        "part": "snippet",
+                        "mode": "all_current",
+                        "maxResults": 1000,
+                        "pageToken": pageToken
+                    });
+
+                    const items = response.result.items;
+                    if (items) {
+                        items.forEach(item => {
+                            const snippet = item.snippet;
+                            const channelId = snippet.memberDetails.channelId;
+                            const months = snippet.membershipsDetails.membershipsDuration.memberTotalDurationMonths;
+                            memberList.set(channelId, {
+                                name: snippet.memberDetails.displayName,
+                                url: `https://www.youtube.com/channel/${channelId}`,
+                                months: months || 0
+                            });
+                        });
+                    }
+                    pageToken = response.result.nextPageToken || "";
+                } while (pageToken);
+
+                // 抓取完後更新符合條件的數量，與 CSV 匯入時同步邏輯
+                let qualifiedCount = 0;
+                memberList.forEach(m => {
+                    if (m.months >= minMonths) qualifiedCount++;
+                });
+
+                document.getElementById('api_status').innerHTML = `✅ 同步完成！<br>共抓取 <strong>${memberList.size}</strong> 位付費會員<br>符合 ${minMonths} 個月以上條件：<strong>${qualifiedCount}</strong> 位`;
+                updateQualificationSummary();
+
+            } catch (err) {
+                console.error("API Error", err);
+                const status = err.status;
+                let msg = "❌ 抓取失敗";
+
+                if (status === 403) {
+                    msg = "❌ 權限不足 (403)";
+                    document.getElementById('api_status').innerHTML = `
+                        <span style="color: var(--red);">${msg}</span><br>
+                        <small style="color: var(--fg-base);">
+                            可能原因（請逐一確認）：<br>
+                            <span style="display:inline-block; margin: 4px 0 2px 0;">
+                                ① 頻道尚未開通「會員」功能（最常見）<br>
+                                &nbsp;&nbsp;&nbsp;→ 需加入 YouTube 合作夥伴計畫（YPP）並在 Studio 後台啟用會員方案<br>
+                                ② 登入的帳號不是頻道擁有者<br>
+                                ③ Google Cloud Console 的「YouTube Data API v3」尚未啟用
+                            </span><br>
+                            建議改用 <a href="javascript:void(0)" onclick="document.getElementById('memberCsvFile').click()" style="color: var(--primary); text-decoration: underline;">CSV 手動匯入</a>
+                        </small>
+                    `;
+                } else {
+                    document.getElementById('api_status').innerText = `${msg}: ${err.result?.error?.message || ''}`;
+                }
+            }
+        }
+
+        // 控制教學步驟顯示／隱藏
+        function toggleApiHelp() {
+            const steps = document.getElementById('apiHelpSteps');
+            steps.style.display = (steps.style.display === 'none') ? 'block' : 'none';
+        }
+
+        function syncApiConfig(source) {
+            if (source === 'client') {
+                USER_CONFIG.CLIENT_ID = document.getElementById('memberClientId').value.trim();
+            } else if (source === 'key') {
+                USER_CONFIG.YOUTUBE_API_KEY = document.getElementById('youtubeApiKey').value.trim();
+            }
+        }
+
+        function handleSignoutClick() {
+            const token = gapi.client.getToken();
+            if (token !== null) {
+                google.accounts.oauth2.revoke(token.access_token);
+                gapi.client.setToken('');
+                document.getElementById('api_status').innerText = '已登出';
+                document.getElementById('btn_signout').style.display = 'none';
+                clearMemberData();
+            }
+        }
+
+        function extractChannelId(input) {
+            if (!input) return null;
+
+            const trimmed = input.trim();
+
+            // 0. 如果直接就是 Channel ID 格式（UC 開頭，22-24 字元）
+            if (/^UC[\w-]{20,24}$/.test(trimmed)) {
+                return trimmed;
+            }
+
+            // 0.1 如果是 @handle 格式（直接的 handle）
+            if (/^@[\w.-]+$/.test(trimmed)) {
+                return trimmed;
+            }
+
+            // 嘗試多種 YouTube URL 格式
+            // 1. /channel/UCxxxxxx 格式 (Channel ID 長度不固定，通常 22-24 字元)
+            let match = trimmed.match(/\/channel\/(UC[\w-]+)/);
+            if (match) return match[1];
+
+            // 2. http(s)://www.youtube.com/channel/UCxxxxxx 完整 URL
+            match = trimmed.match(/youtube\.com\/channel\/(UC[\w-]+)/);
+            if (match) return match[1];
+
+            // 3. /@username 格式 (handle)
+            match = trimmed.match(/\/@([\w.-]+)/);
+            if (match) return '@' + match[1];
+
+            // 4. /c/CustomName 格式
+            match = trimmed.match(/\/c\/([\w.-]+)/);
+            if (match) return 'c/' + match[1];
+
+            // 5. /user/username 格式
+            match = trimmed.match(/\/user\/([\w.-]+)/);
+            if (match) return 'user/' + match[1];
+
+            return null;
+        }
+
+        // 正規化 handle 以便比對（移除@、轉小寫、從URL提取、解碼URL編碼）
+        function normalizeHandle(input) {
+            if (!input) return null;
+            let handle = input.trim();
+
+            // 如果是 UCxxxxxx 格式的 Channel ID，不適合作為 handle 比對
+            if (/^UC[\w-]{20,24}$/.test(handle)) {
+                return null;
+            }
+
+            // 嘗試解碼 URL 編碼（例如 %E5%BD%A5 → 彥）
+            try {
+                if (handle.includes('%')) {
+                    handle = decodeURIComponent(handle);
+                }
+            } catch (e) {
+                // 解碼失敗就用原始值
+            }
+
+            // 如果是完整 URL，嘗試提取 handle
+            if (handle.includes('youtube.com') || handle.includes('youtu.be')) {
+                const match = handle.match(/\/@?([^\/\?#]+)/);
+                if (match) {
+                    handle = match[1];
+                    // 再次嘗試解碼
+                    try {
+                        if (handle.includes('%')) {
+                            handle = decodeURIComponent(handle);
+                        }
+                    } catch (e) { }
+                }
+            }
+
+            // 移除開頭的 @ 符號
+            if (handle.startsWith('@')) {
+                handle = handle.substring(1);
+            }
+
+            // 轉換為小寫以忽略大小寫差異
+            return handle.toLowerCase();
+        }
+
+        // 查找留言者（透過 Channel ID 或 handle）
+        function findCommenter(identifyData) {
+            if (!identifyData) return null;
+
+            // 1. 先嘗試直接用 Channel ID 查找
+            const channelId = extractChannelId(identifyData);
+            if (channelId && channelId.startsWith('UC') && commenters.has(channelId)) {
+                return { channelId, data: commenters.get(channelId) };
+            }
+
+            // 2. 嘗試用正規化的 handle 查找
+            const normalizedInput = normalizeHandle(identifyData);
+            if (normalizedInput && commentersByHandle.has(normalizedInput)) {
+                const foundChannelId = commentersByHandle.get(normalizedInput);
+                return { channelId: foundChannelId, data: commenters.get(foundChannelId) };
+            }
+
+            return null;
+        }
+
+        function parseMemberDuration(text) {
+            if (!text) return 0;
+            const t = text.toString().trim();
+
+            // 如果只有純數字，直接當作月份（YouTube 官方 CSV 常見匯出格式）
+            if (/^\d+$/.test(t)) {
+                return parseInt(t);
+            }
+
+            const monthMatch = t.match(/(\d+)\s*months?/i);
+            if (monthMatch) return parseInt(monthMatch[1]);
+
+            const dayMatch = t.match(/(\d+)\s*days?/i);
+            if (dayMatch) return 0;
+
+            // 嘗試解析中文格式
+            const cnMonthMatch = t.match(/(\d+)\s*個?月/);
+            if (cnMonthMatch) return parseInt(cnMonthMatch[1]);
+
+            return 0;
+        }
+
+        // ========== 留言驗證功能 ==========
+        const COMMENT_SCRIPT = `(function() {
+    // 支援多種 YouTube 留言結構（新舊版本）
+    let comments = document.querySelectorAll('ytd-comment-thread-renderer, ytd-comment-renderer');
+    let result = new Map();
+    console.log('找到留言元素數量:', comments.length);
+
+    comments.forEach((comment, idx) => {
+        // 嘗試多種選擇器取得作者連結
+        let authorLink = comment.querySelector('#author-text')?.href ||
+                         comment.querySelector('a#author-text')?.href ||
+                         comment.querySelector('[id="author-text"]')?.href ||
+                         comment.querySelector('a.ytd-comment-view-model')?.href ||
+                         comment.querySelector('ytd-comment-view-model a')?.href ||
+                         comment.querySelector('a[href*="/channel/"]')?.href ||
+                         comment.querySelector('a[href*="/@"]')?.href;
+
+        // 嘗試多種選擇器取得作者名稱
+        let name = comment.querySelector('#author-text span')?.innerText?.trim() ||
+                   comment.querySelector('#author-text')?.innerText?.trim() ||
+                   comment.querySelector('.author-text')?.innerText?.trim() ||
+                   comment.querySelector('span.ytd-comment-view-model')?.innerText?.trim() ||
+                   comment.querySelector('ytd-channel-name a')?.innerText?.trim() ||
+                   comment.querySelector('h3 a')?.innerText?.trim();
+
+        // 嘗試多種選擇器取得留言內容
+        let content = comment.querySelector('#content-text')?.innerText?.trim() ||
+                      comment.querySelector('#content')?.innerText?.trim() ||
+                      comment.querySelector('.content-text')?.innerText?.trim() ||
+                      comment.querySelector('yt-attributed-string#content-text')?.innerText?.trim() ||
+                      comment.querySelector('[id="content-text"]')?.innerText?.trim();
+
+        if (idx < 3) {
+            console.log('留言 ' + idx + ':', { authorLink, name, content: content?.substring(0, 30) });
+        }
+
+        if (authorLink && name) {
+            // 嘗試提取 Channel ID
+            let channelId = null;
+            let match = authorLink.match(/\\/channel\\/(UC[\\w-]+)/);
+            if (match) {
+                channelId = match[1];
+            } else {
+                // 嘗試從 /@username 格式提取（支援 URL 編碼的中文用戶名）
+                let handleMatch = authorLink.match(/\\/@([^\\/\\?#]+)/);
+                if (handleMatch) {
+                    // 解碼 URL 編碼（例如 %E5%BD%A5 → 彥）
+                    try {
+                        channelId = '@' + decodeURIComponent(handleMatch[1]);
+                    } catch(e) {
+                        channelId = '@' + handleMatch[1]; // 解碼失敗就用原始值
+                    }
+                }
+            }
+
+            if (channelId && !result.has(channelId)) {
+                result.set(channelId, { name, content: content || '', channelId });
+            }
+        }
+    });
+
+    if (result.size === 0) {
+        alert('未找到留言！\\n\\n請確認：\\n1. 頁面已載入留言（往下滾動）\\n2. 留言區已展開\\n3. 如果還是不行，請回報此問題');
+        console.log('除錯資訊：找到 ' + comments.length + ' 個留言元素，但無法提取資料');
+    } else {
+        let output = JSON.stringify(Array.from(result.values()), null, 2);
+
+        // 定義複製到剪貼簿的備用方案
+        function fallbackCopy(text) {
+            // 方案 1: 使用 textarea + execCommand
+            try {
+                let textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.top = '0';
+                textarea.style.left = '0';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.focus();
+                textarea.select();
+                let success = document.execCommand('copy');
+                document.body.removeChild(textarea);
+                if (success) {
+                    alert('已複製 ' + result.size + ' 位留言者資料到剪貼簿！\\n請回到抽獎程式貼上。');
+                    return true;
+                }
+            } catch(e) {
+                console.log('execCommand 複製失敗:', e);
+            }
+
+            // 方案 2: 使用 prompt 對話框讓用戶手動複製
+            alert('自動複製失敗！\\n\\n接下來會顯示一個對話框，請選取全部內容 (Ctrl+A) 後複製 (Ctrl+C)。');
+            prompt('請選取以下內容並複製 (Ctrl+A 然後 Ctrl+C)：', text);
+
+            // 方案 3: 在頁面上創建一個可見的文字區域
+            let div = document.createElement('div');
+            div.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);z-index:999999;background:#fff;padding:20px;border-radius:10px;box-shadow:0 0 20px rgba(0,0,0,0.5);max-width:80%;max-height:80%;overflow:auto;';
+            div.innerHTML = '<h3 style=\"margin:0 0 10px 0;\">留言者資料 (' + result.size + ' 人)</h3><p style=\"color:#666;margin-bottom:10px;\">請選取下方文字並複製 (Ctrl+A → Ctrl+C)，然後關閉此視窗</p><textarea style=\"width:100%;height:300px;font-family:monospace;font-size:12px;\">' + text.replace(/</g, '&lt;') + '</textarea><br><button onclick=\"this.parentElement.remove()\" style=\"margin-top:10px;padding:10px 20px;cursor:pointer;\">關閉</button>';
+            document.body.appendChild(div);
+            div.querySelector('textarea').select();
+
+            return false;
+        }
+
+        // 先嘗試使用 execCommand（更可靠，因為 Console 執行時頁面通常沒有焦點）
+        let copied = false;
+        try {
+            let textarea = document.createElement('textarea');
+            textarea.value = output;
+            textarea.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none;';
+            document.body.appendChild(textarea);
+            textarea.focus();
+            textarea.select();
+            copied = document.execCommand('copy');
+            document.body.removeChild(textarea);
+        } catch(e) {
+            // 靜默處理
+        }
+
+        if (copied) {
+            alert('已複製 ' + result.size + ' 位留言者資料到剪貼簿！\\n請回到抽獎程式貼上。');
+        } else if (navigator.clipboard && navigator.clipboard.writeText) {
+            // 備用：嘗試 Clipboard API（可能需要頁面有焦點）
+            navigator.clipboard.writeText(output).then(() => {
+                alert('已複製 ' + result.size + ' 位留言者資料到剪貼簿！\\n請回到抽獎程式貼上。');
+            }).catch(() => {
+                // Clipboard API 也失敗，使用手動複製方案
+                fallbackCopy(output);
+            });
+        } else {
+            fallbackCopy(output);
+        }
+
+        console.log('留言者資料：', output);
+    }
+})();`;
+
+        function copyCommentScript() {
+            navigator.clipboard.writeText(COMMENT_SCRIPT).then(() => {
+                alert('腳本已複製到剪貼簿！\n\n請到 YouTube 影片頁面，按 F12 開啟開發者工具，在 Console 中貼上並執行。');
+            }).catch(err => {
+                // 備用方案
+                const textarea = document.createElement('textarea');
+                textarea.value = COMMENT_SCRIPT;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                alert('腳本已複製！');
+            });
+        }
+
+        function showScriptPreview() {
+            const preview = document.getElementById('scriptPreview');
+            if (preview.style.display === 'none') {
+                preview.style.display = 'block';
+                preview.textContent = COMMENT_SCRIPT;
+            } else {
+                preview.style.display = 'none';
+            }
+        }
+
+        function parseCommentJson() {
+            const input = document.getElementById('commentJsonInput').value.trim();
+            if (!input) {
+                commenters.clear();
+                document.getElementById('commentParseResult').style.display = 'none';
+                updateQualificationSummary();
+                return;
+            }
+
+            try {
+                const data = JSON.parse(input);
+                if (!Array.isArray(data)) {
+                    throw new Error('資料格式錯誤');
+                }
+
+                commenters.clear();
+                commentersByHandle.clear();
+                data.forEach(item => {
+                    if (item.channelId && item.name) {
+                        commenters.set(item.channelId, {
+                            name: item.name,
+                            content: item.content || ''
+                        });
+                        // 建立 handle 對應（從 name 和 channelId 提取）
+                        // YouTube API: name 是 @handle, channelId 是 UCxxxx
+                        // 手動 JS: name 是顯示名稱, channelId 是 @handle
+                        const normalizedName = normalizeHandle(item.name);
+                        const normalizedChannelId = normalizeHandle(item.channelId);
+                        if (normalizedName) {
+                            commentersByHandle.set(normalizedName, item.channelId);
+                        }
+                        // 如果 channelId 是 @handle 格式（手動 JS 抓取的情況），也加入對應
+                        if (normalizedChannelId && normalizedChannelId !== normalizedName) {
+                            commentersByHandle.set(normalizedChannelId, item.channelId);
+                        }
+                    }
+                });
+
+                displayCommentResults('解析');
+            } catch (err) {
+                alert('JSON 解析失敗：' + err.message + '\n\n請確認貼上的是完整的 JSON 資料。');
+            }
+        }
+
+        function clearCommentData() {
+            commenters.clear();
+            commentersByHandle.clear();
+            document.getElementById('commentJsonInput').value = '';
+            document.getElementById('commentParseResult').style.display = 'none';
+            document.getElementById('commentImportFileName').textContent = '';
+            document.getElementById('commentImportFile').value = '';
+            updateQualificationSummary();
+        }
+
+        // 匯出留言資料為 JSON 檔案
+        function exportCommenters() {
+            if (commenters.size === 0) {
+                alert('沒有留言資料可匯出！');
+                return;
+            }
+
+            const data = Array.from(commenters.entries()).map(([channelId, info]) => ({
+                channelId,
+                name: info.name,
+                content: info.content
+            }));
+
+            const json = JSON.stringify(data, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+
+            const a = document.createElement('a');
+            a.href = url;
+            const timestamp = new Date().toISOString().slice(0, 10);
+            a.download = `留言資料_${commenters.size}人_${timestamp}.json`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // 重設留言 JSON 檔案選擇（允許重選同一檔案）
+        function resetCommentImportAndSelect() {
+            const fileInput = document.getElementById('commentImportFile');
+            fileInput.value = '';
+            fileInput.click();
+        }
+
+        // 匯入留言資料 JSON 檔案
+        function importCommenters(input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            document.getElementById('commentImportFileName').textContent = file.name;
+
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (!Array.isArray(data)) {
+                        throw new Error('資料格式錯誤，需為陣列');
+                    }
+
+                    commenters.clear();
+                    commentersByHandle.clear();
+
+                    data.forEach(item => {
+                        const channelId = item.channelId;
+                        const name = item.name;
+                        const content = item.content || '';
+
+                        if (channelId && name) {
+                            commenters.set(channelId, { name, content });
+                            // 建立 handle 對應
+                            const normalizedName = normalizeHandle(name);
+                            const normalizedChannelId = normalizeHandle(channelId);
+                            if (normalizedName) {
+                                commentersByHandle.set(normalizedName, channelId);
+                            }
+                            if (normalizedChannelId && normalizedChannelId !== normalizedName) {
+                                commentersByHandle.set(normalizedChannelId, channelId);
+                            }
+                        }
+                    });
+
+                    displayCommentResults('匯入');
+                    alert(`成功匯入 ${commenters.size} 位留言者資料！`);
+
+                } catch (err) {
+                    alert('匯入失敗：' + err.message);
+                    document.getElementById('commentImportFileName').textContent = '';
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // ========== 留言標籤頁切換 ==========
+        function switchCommentTab(tab) {
+            // 切換標籤按鈕樣式
+            document.querySelectorAll('.comment-tab').forEach(btn => btn.classList.remove('active'));
+            document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+
+            // 切換內容區域
+            document.getElementById('commentTabManual').style.display = tab === 'manual' ? 'block' : 'none';
+            document.getElementById('commentTabInvidious').style.display = tab === 'invidious' ? 'block' : 'none';
+            document.getElementById('commentTabYoutube').style.display = tab === 'youtube' ? 'block' : 'none';
+
+            // 顯示 YouTube API 配額提示
+            const quotaInfo = document.getElementById('youtubeApiQuotaInfo');
+            if (quotaInfo) {
+                quotaInfo.style.display = tab === 'youtube' ? 'block' : 'none';
+            }
+        }
+
+        // 切換 API 金鑰顯示
+        function toggleApiKeyVisibility(checkbox) {
+            const input = document.getElementById('youtubeApiKey');
+            input.type = checkbox.checked ? 'text' : 'password';
+        }
+
+        // 從 URL 提取影片 ID
+        function extractVideoId(url) {
+            if (!url) return null;
+
+            // 如果已經是純 ID（11 個字元）
+            if (/^[a-zA-Z0-9_-]{11}$/.test(url.trim())) {
+                return url.trim();
+            }
+
+            // 嘗試從各種 YouTube URL 格式提取
+            const patterns = [
+                /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/)([a-zA-Z0-9_-]{11})/,
+                /youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/
+            ];
+
+            for (const pattern of patterns) {
+                const match = url.match(pattern);
+                if (match) return match[1];
+            }
+
+            return null;
+        }
+
+        // ========== Invidious API 獲取留言（自架伺服器） ==========
+        async function fetchCommentsFromInvidious() {
+            const videoUrl = document.getElementById('invidiousVideoUrl').value.trim();
+            const server = document.getElementById('invidiousCustomUrl').value.trim();
+
+            if (!server) {
+                alert('請輸入您的 Invidious 伺服器網址');
+                return;
+            }
+
+            const videoId = extractVideoId(videoUrl);
+            if (!videoId) {
+                alert('請輸入有效的 YouTube 影片網址或影片 ID');
+                return;
+            }
+
+            const statusEl = document.getElementById('invidiousStatus');
+            const btn = document.getElementById('btnFetchInvidious');
+
+            btn.disabled = true;
+            statusEl.innerHTML = '⏳ 正在獲取留言...';
+
+            try {
+                // Invidious API 端點
+                const apiUrl = `${server}/api/v1/comments/${videoId}`;
+
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    throw new Error(`API 請求失敗 (${response.status})`);
+                }
+
+                const data = await response.json();
+
+                if (!data.comments || data.comments.length === 0) {
+                    statusEl.innerHTML = '⚠️ 未找到留言或影片不存在';
+                    btn.disabled = false;
+                    return;
+                }
+
+                // 處理留言資料
+                commenters.clear();
+                commentersByHandle.clear();
+                data.comments.forEach(comment => {
+                    const channelId = comment.authorId || comment.authorUrl?.split('/').pop();
+                    if (channelId && comment.author) {
+                        commenters.set(channelId, {
+                            name: comment.author,
+                            content: comment.content || ''
+                        });
+                        // 建立 handle 對應（從 name 和 channelId 提取）
+                        const normalizedName = normalizeHandle(comment.author);
+                        const normalizedChannelId = normalizeHandle(channelId);
+                        if (normalizedName) {
+                            commentersByHandle.set(normalizedName, channelId);
+                        }
+                        if (normalizedChannelId && normalizedChannelId !== normalizedName) {
+                            commentersByHandle.set(normalizedChannelId, channelId);
+                        }
+                    }
+                });
+
+                // 顯示結果
+                displayCommentResults();
+                statusEl.innerHTML = `✅ 成功獲取 ${commenters.size} 位留言者`;
+
+            } catch (err) {
+                console.error('Invidious API 錯誤:', err);
+                statusEl.innerHTML = `❌ 獲取失敗：${err.message}<br><small>請嘗試其他伺服器或使用手動抓取方式</small>`;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // ========== YouTube Data API 獲取留言 ==========
+        async function fetchCommentsFromYouTubeAPI() {
+            const apiKey = USER_CONFIG.YOUTUBE_API_KEY;
+            const videoUrl = document.getElementById('youtubeVideoUrl').value.trim();
+            const limit = 0; // 移除介面後，預設無上限（自動抓取全部）
+
+            if (!apiKey || apiKey.includes('替換這裡')) {
+                alert('系統尚未讀取到有效的 YouTube API 金鑰，請在設定區或原始碼頂部補充！');
+                return;
+            }
+
+            const videoId = extractVideoId(videoUrl);
+            if (!videoId) {
+                alert('請輸入有效的 YouTube 影片網址或影片 ID');
+                return;
+            }
+
+            const statusEl = document.getElementById('youtubeApiStatus');
+            const btn = document.getElementById('btnFetchYoutube');
+
+            btn.disabled = true;
+            statusEl.innerHTML = '⏳ 正在獲取留言...';
+
+            try {
+                commenters.clear();
+                commentersByHandle.clear();
+                let pageToken = '';
+                let totalFetched = 0;
+
+                // 優先檢查是否有 OAuth Token (讀取受限影片必備)
+                const token = gapi?.client?.getToken()?.access_token;
+
+                do {
+                    const url = new URL('https://www.googleapis.com/youtube/v3/commentThreads');
+                    url.searchParams.set('part', 'snippet');
+                    url.searchParams.set('videoId', videoId);
+                    url.searchParams.set('maxResults', '100');
+                    url.searchParams.set('textFormat', 'plainText');
+
+                    // 重要：如果有 Token (帶有 Bearer)，就不要送 Key 參數，避免權限衝突導致受限影片被擋
+                    if (!token) {
+                        url.searchParams.set('key', apiKey);
+                    }
+
+                    if (pageToken) {
+                        url.searchParams.set('pageToken', pageToken);
+                    }
+
+                    const response = await fetch(url, {
+                        headers: token ? {
+                            'Authorization': 'Bearer ' + token
+                        } : {}
+                    });
+                    const data = await response.json();
+
+                    if (data.error) {
+                        // 如果是因為權限問題，且我們有 Token，提示用戶可能是 Scope 過期
+                        if (data.error.code === 403) {
+                            const oauthArea = document.getElementById('commentOAuthArea');
+                            const normalHint = document.getElementById('commentAuthNormalHint');
+                            const corsWarn = document.getElementById('commentCorsWarning');
+
+                            if (oauthArea) oauthArea.style.display = 'block';
+
+                            const isLocal = window.location.protocol === 'file:';
+                            if (isLocal) {
+                                if (normalHint) normalHint.style.display = 'none';
+                                if (corsWarn) corsWarn.style.display = 'block';
+                                throw new Error('無法存取受限影片。偵測到您目前為本機檔案環境，無法使用授權功能。');
+                            } else {
+                                if (normalHint) normalHint.style.display = 'block';
+                                if (corsWarn) corsWarn.style.display = 'none';
+
+                                if (token) {
+                                    throw new Error('存取權限不足。這通常是因為該影片為會員專屬或受限影片。請嘗試下方【授權】按鈕以更新權限範圍。');
+                                } else {
+                                    throw new Error('無法存取受限影片。請先點擊下方【授權】按鈕以取得讀取權限。');
+                                }
+                            }
+                        }
+                        throw new Error(data.error.message || 'API 請求失敗');
+                    }
+
+                    if (!data.items || data.items.length === 0) {
+                        if (totalFetched === 0) {
+                            statusEl.innerHTML = '⚠️ 未找到留言或影片不存在';
+                            btn.disabled = false;
+                            return;
+                        }
+                        break;
+                    }
+
+                    // 處理留言資料
+                    data.items.forEach(item => {
+                        const comment = item.snippet.topLevelComment.snippet;
+                        const channelId = comment.authorChannelId?.value;
+                        if (channelId && comment.authorDisplayName) {
+                            commenters.set(channelId, {
+                                name: comment.authorDisplayName,
+                                content: comment.textDisplay || ''
+                            });
+                            // 建立 handle 對應（從 name 和 channelId 提取）
+                            const normalizedName = normalizeHandle(comment.authorDisplayName);
+                            const normalizedChannelId = normalizeHandle(channelId);
+                            if (normalizedName) {
+                                commentersByHandle.set(normalizedName, channelId);
+                            }
+                            if (normalizedChannelId && normalizedChannelId !== normalizedName) {
+                                commentersByHandle.set(normalizedChannelId, channelId);
+                            }
+                        }
+                    });
+
+                    totalFetched += data.items.length;
+                    pageToken = data.nextPageToken || '';
+                    statusEl.innerHTML = `⏳ 已獲取 ${commenters.size} 位留言者...`;
+
+                    // 檢查是否達到限制
+                    if (limit > 0 && totalFetched >= limit) {
+                        break;
+                    }
+
+                } while (pageToken);
+
+                // 顯示結果
+                displayCommentResults();
+                statusEl.innerHTML = `✅ 成功獲取 ${commenters.size} 位留言者`;
+
+            } catch (err) {
+                console.error('YouTube API 錯誤:', err);
+                let errorMsg = err.message;
+                if (errorMsg.includes('API key')) {
+                    errorMsg = 'API 金鑰無效或已過期';
+                } else if (errorMsg.includes('quota')) {
+                    errorMsg = '已達到每日配額限制';
+                } else if (errorMsg.includes('disabled comments')) {
+                    errorMsg = '該影片已停用留言功能';
+                }
+                statusEl.innerHTML = `❌ 獲取失敗：${errorMsg}`;
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // 顯示留言結果（共用函數）
+        function displayCommentResults(verb = '獲取') {
+            document.getElementById('commentParseResult').style.display = 'block';
+            document.getElementById('commentParseStats').innerHTML = `共${verb} <strong>${commenters.size}</strong> 位不重複的留言者`;
+
+            // 顯示預覽
+            let previewHtml = '';
+            let count = 0;
+            commenters.forEach((value, key) => {
+                if (count < 5) {
+                    previewHtml += `
+                        <div class="comment-preview-item">
+                            <div class="commenter-name">${value.name}</div>
+                            <div class="comment-text">${value.content || '(無留言內容)'}</div>
+                        </div>
+                    `;
+                    count++;
+                }
+            });
+            if (commenters.size > 5) {
+                previewHtml += `<div style="text-align: center; color: var(--fg-base);">... 還有 ${commenters.size - 5} 位</div>`;
+            }
+            document.getElementById('commentPreviewList').innerHTML = previewHtml;
+
+            updateQualificationSummary();
+        }
+
+        // 清除留言資料
+        function clearCommentData() {
+            if (confirm('確定要清除所有留言資料嗎？')) {
+                commenters.clear();
+                commentersByHandle.clear();
+
+                document.getElementById('commentParseResult').style.display = 'none';
+                document.getElementById('commentParseStats').innerHTML = '';
+                document.getElementById('commentPreviewList').innerHTML = '';
+
+                const youtubeStatus = document.getElementById('youtubeApiStatus');
+                if (youtubeStatus) youtubeStatus.innerHTML = '';
+
+                updateQualificationSummary();
+                alert('留言資料已清除！');
+            }
+        }
+
+        // ========== 通用 CSV 解析（支援編碼偵測） ==========
+        function parseCSV(content) {
+            const lines = content.split(/\r?\n/);
+            const result = [];
+
+            lines.forEach(line => {
+                if (line.trim()) {
+                    // 簡單的 CSV 解析（處理逗號分隔）
+                    const row = [];
+                    let current = '';
+                    let inQuotes = false;
+
+                    for (let i = 0; i < line.length; i++) {
+                        const char = line[i];
+                        if (char === '"') {
+                            inQuotes = !inQuotes;
+                        } else if (char === ',' && !inQuotes) {
+                            row.push(current.trim());
+                            current = '';
+                        } else {
+                            current += char;
+                        }
+                    }
+                    row.push(current.trim());
+                    result.push(row);
+                }
+            });
+
+            return result;
+        }
+
+        // 讀取檔案並自動偵測編碼
+        function readFileWithEncoding(file, callback) {
+            const reader = new FileReader();
+
+            reader.onload = function (e) {
+                const content = e.target.result;
+
+                // 檢查是否有亂碼（常見的 UTF-8 亂碼特徵）
+                if (content.includes('�') || /[\x80-\xFF]{3,}/.test(content)) {
+                    // 嘗試用其他編碼重新讀取
+                    const reader2 = new FileReader();
+                    reader2.onload = function (e2) {
+                        callback(e2.target.result);
+                    };
+                    // 嘗試 Big5（繁體中文）
+                    reader2.readAsText(file, 'Big5');
+                } else {
+                    callback(content);
+                }
+            };
+
+            // 先嘗試 UTF-8
+            reader.readAsText(file, 'UTF-8');
+        }
+
+        // ========== 步驟 2：參與者 CSV 匯入 ==========
+        function resetParticipantsCsvAndSelect() {
+            // 重設狀態以允許重選相同檔案
+            const fileInput = document.getElementById('participantsCsvFile');
+            fileInput.value = '';
+            participantsCsvData = [];
+            document.getElementById('participantsCsvPreview').style.display = 'none';
+            document.getElementById('participantsCsvFileName').textContent = '';
+            fileInput.click();
+        }
+
+        function previewParticipantsCsv() {
+            const fileInput = document.getElementById('participantsCsvFile');
+            const file = fileInput.files[0];
+            if (!file) return;
+
+            document.getElementById('participantsCsvFileName').textContent = file.name;
+
+            readFileWithEncoding(file, function (content) {
+                participantsCsvData = parseCSV(content);
+
+                if (participantsCsvData.length === 0) {
+                    alert('無法解析 CSV 檔案');
+                    return;
+                }
+
+                updateParticipantsCsvColumnSelects();
+                document.getElementById('participantsCsvPreview').style.display = 'block';
+                updateParticipantsCsvPreview();
+            });
+        }
+
+        function updateParticipantsCsvColumnSelects(preserveSelection = false) {
+            const hasHeader = document.getElementById('participantsCsvHasHeader').checked;
+            const firstRow = participantsCsvData[0] || [];
+            const nameSelect = document.getElementById('participantsCsvNameCol');
+            const idSelect = document.getElementById('participantsCsvIdCol');
+
+            // 保存當前選擇（在清空之前）
+            const savedNameIdx = nameSelect.value || '0';
+            const savedIdIdx = idSelect.value || '-1';
+
+            nameSelect.innerHTML = '';
+            idSelect.innerHTML = '<option value="-1">（不使用）</option>';
+
+            firstRow.forEach((col, index) => {
+                const label = hasHeader ? col : `欄位 ${index + 1}`;
+                nameSelect.innerHTML += `<option value="${index}">${label}</option>`;
+                idSelect.innerHTML += `<option value="${index}">${label}</option>`;
+            });
+
+            // 恢復選擇
+            if (preserveSelection) {
+                nameSelect.value = savedNameIdx;
+                idSelect.value = savedIdIdx;
+            } else {
+                // 首次載入時，嘗試自動偵測欄位
+                if (hasHeader) {
+                    firstRow.forEach((col, index) => {
+                        const lowerCol = col.toLowerCase();
+                        if (lowerCol.includes('url') || lowerCol.includes('profile') || lowerCol.includes('channel') || lowerCol.includes('連結') || lowerCol.includes('頻道')) {
+                            idSelect.value = String(index);
+                        }
+                        if (lowerCol.includes('name') || lowerCol.includes('名') || lowerCol.includes('姓名')) {
+                            nameSelect.value = String(index);
+                        }
+                    });
+                }
+            }
+        }
+
+        function updateParticipantsCsvPreview() {
+            const hasHeader = document.getElementById('participantsCsvHasHeader').checked;
+
+            // 先保存當前選擇
+            const nameColIdx = parseInt(document.getElementById('participantsCsvNameCol').value) || 0;
+            const idColIdx = parseInt(document.getElementById('participantsCsvIdCol').value);
+
+            // 只有在 hasHeader 改變時才需要重建選單（因為標籤會變）
+            updateParticipantsCsvColumnSelects(true);
+
+            const startRow = hasHeader ? 1 : 0;
+            const previewRows = participantsCsvData.slice(startRow, startRow + 5);
+
+            let html = '<table style="width: 100%; font-size: 0.85rem; border-collapse: collapse;">';
+            html += '<tr style="background: var(--bg-highlight);"><th style="padding: 8px; text-align: left;">名字</th><th style="padding: 8px; text-align: left;">識別資料</th></tr>';
+
+            previewRows.forEach(row => {
+                const name = row[nameColIdx] || '';
+                const id = idColIdx >= 0 ? (row[idColIdx] || '') : '';
+                html += `<tr><td style="padding: 6px;">${name}</td><td style="padding: 6px;">${id}</td></tr>`;
+            });
+
+            html += '</table>';
+            if (participantsCsvData.length > (hasHeader ? 6 : 5)) {
+                html += `<div style="text-align: center; color: var(--fg-base); margin-top: 5px;">... 共 ${participantsCsvData.length - (hasHeader ? 1 : 0)} 筆資料</div>`;
+            }
+
+            document.getElementById('participantsCsvPreviewTable').innerHTML = html;
+        }
+
+        function importParticipantsCsv() {
+            const hasHeader = document.getElementById('participantsCsvHasHeader').checked;
+            const nameColIdx = parseInt(document.getElementById('participantsCsvNameCol').value) || 0;
+            const idColValue = document.getElementById('participantsCsvIdCol').value;
+            const idColIdx = idColValue !== '' && idColValue !== '-1' ? parseInt(idColValue) : -1;
+
+            console.log('匯入設定:', { hasHeader, nameColIdx, idColValue, idColIdx });
+
+            const startRow = hasHeader ? 1 : 0;
+            const names = [];
+            const ids = [];
+
+            for (let i = startRow; i < participantsCsvData.length; i++) {
+                const row = participantsCsvData[i];
+                const name = (row[nameColIdx] || '').trim();
+                // 確保 idColIdx 是有效的非負整數
+                const id = (idColIdx >= 0 && idColIdx < row.length) ? (row[idColIdx] || '').trim() : '';
+
+                if (name) {
+                    names.push(name);
+                    ids.push(id);
+                }
+            }
+
+            console.log('匯入結果:', { namesCount: names.length, idsCount: ids.length, sampleIds: ids.slice(0, 3) });
+
+            // 填入到文字框
+            document.getElementById('participantsNames').value = names.join('\n');
+            document.getElementById('participantsIds').value = ids.join('\n');
+
+            // 更新顯示
+            updateParticipantsDisplay();
+
+            // 隱藏預覽
+            document.getElementById('participantsCsvPreview').style.display = 'none';
+
+            const idMsg = idColIdx >= 0 ? `，包含 ${ids.filter(id => id).length} 筆識別資料` : '';
+            alert(`已匯入 ${names.length} 位參與者${idMsg}！`);
+        }
+
+        function cancelParticipantsCsv() {
+            document.getElementById('participantsCsvPreview').style.display = 'none';
+            document.getElementById('participantsCsvFile').value = '';
+            document.getElementById('participantsCsvFileName').textContent = '';
+            participantsCsvData = [];
+        }
+
+        // ========== 資格驗證摘要 ==========
+        function updateQualificationSummary() {
+            const enableForm = document.getElementById('enableFormCheck')?.checked;
+            const enableMember = document.getElementById('enableMemberCheck')?.checked;
+            const enableComment = document.getElementById('enableCommentCheck')?.checked;
+
+            if (!enableForm && !enableMember && !enableComment) {
+                document.getElementById('qualificationSummary').style.display = 'none';
+                return;
+            }
+
+            let html = '';
+
+            if (enableForm) {
+                html += `<div class="summary-item"><span>📝 表單參加者</span><strong>${formParticipants.size} 人</strong></div>`;
+            }
+            if (enableMember) {
+                const minMonths = parseInt(document.getElementById('memberMinMonths')?.value) || 0;
+                let qualifiedCount = 0;
+                memberList.forEach(m => { if (m.months >= minMonths) qualifiedCount++; });
+                html += `<div class="summary-item"><span>💎 付費會員 (≥${minMonths}個月)</span><strong>${qualifiedCount} / ${memberList.size} 人</strong></div>`;
+            }
+            if (enableComment) {
+                html += `<div class="summary-item"><span>💬 留言者</span><strong>${commenters.size} 人</strong></div>`;
+            }
+
+            document.getElementById('qualificationStats').innerHTML = html;
+            document.getElementById('qualificationSummary').style.display = 'block';
+        }
+
+        // ==================== 步驟 3 功能結束 ====================
+
+        // ========== @Handle 轉換為 Channel ID ==========
+        async function convertHandlesToIds() {
+            let apiKey = USER_CONFIG.YOUTUBE_API_KEY || (document.getElementById('youtubeApiKey') ? document.getElementById('youtubeApiKey').value.trim() : '');
+
+            if (!apiKey) {
+                const inputKey = prompt('請輸入您的 YouTube Data API 金鑰以啟動轉換功能：\n\n(提示：您也可直接將金鑰填寫於此 HTML 檔案頂端第 11 行的設定區，從此不必再重新輸入！)');
+                if (inputKey && inputKey.trim()) {
+                    apiKey = inputKey.trim();
+                    USER_CONFIG.YOUTUBE_API_KEY = apiKey;
+                    // 同步更新到隱藏在其他步驟的設定框
+                    const envKeyInput = document.getElementById('youtubeApiKey');
+                    if (envKeyInput) envKeyInput.value = apiKey;
+                } else {
+                    // 使用者取消或無輸入則中止轉換操作
+                    return;
+                }
+            }
+
+            const idsTextarea = document.getElementById('participantsIds');
+            const lines = idsTextarea.value.split('\n');
+            let updatedCount = 0;
+
+            const btn = document.getElementById('btnConvertHandles');
+            if (btn) btn.disabled = true;
+
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            loadingOverlay.classList.add('active');
+            const countdownEl = document.getElementById('countdown');
+
+            try {
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    let handleToQuery = null;
+
+                    if (line.match(/^@[\w.-]+/)) {
+                        handleToQuery = line;
+                    } else if (line.includes('youtube.com/@') || line.includes('youtu.be/@')) {
+                        const match = line.match(/(@[\w.-]+)/);
+                        if (match) handleToQuery = match[1];
+                    }
+
+                    if (handleToQuery) {
+                        try {
+                            const url = `https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${encodeURIComponent(handleToQuery)}&key=${apiKey}`;
+                            const response = await fetch(url);
+                            const data = await response.json();
+
+                            if (data.items && data.items.length > 0) {
+                                lines[i] = `https://www.youtube.com/channel/${data.items[0].id}`;
+                                updatedCount++;
+                            } else {
+                                console.log('找不到 Channel:', handleToQuery);
+                            }
+                        } catch (err) {
+                            console.error('查詢失敗:', handleToQuery, err);
+                        }
+                    }
+                    if (i % 5 === 0) {
+                        countdownEl.textContent = `轉換中... ${Math.round((i / lines.length) * 100)}%`;
+                    }
+                }
+
+                idsTextarea.value = lines.join('\n');
+                updateParticipantsDisplay();
+
+                alert(`轉換完成！共對照更新 ${updatedCount} 筆資料為永久的 Channel ID。`);
+            } catch (err) {
+                alert('轉換過程中發生錯誤：' + err.message);
+            } finally {
+                loadingOverlay.classList.remove('active');
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        // 監聯事件
+        document.getElementById('participantsNames').addEventListener('input', updateParticipantsDisplay);
+        document.getElementById('participantsIds').addEventListener('input', updateParticipantsDisplay);
+
+        document.getElementById('prizeName').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') addPrize();
+        });
+
+        document.getElementById('prizeQuantity').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') addPrize();
+        });
+
+        document.getElementById('rateParticipant').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') addWinRate();
+        });
+
+        document.getElementById('ratePercentage').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') addWinRate();
+        });
+
+        // 初始化
+        updatePrizesList();
+        updatePrizeSelect();
+        updateParticipantsDisplay();
+        updateRatesList();
+        setupAutocomplete();
+        updateWizardUI();
+
+        // 套用使用者預設設定
+        if (USER_CONFIG.YOUTUBE_API_KEY) {
+            document.getElementById('youtubeApiKey').value = USER_CONFIG.YOUTUBE_API_KEY;
+        }
+        if (USER_CONFIG.INVIDIOUS_SERVER) {
+            document.getElementById('invidiousCustomUrl').value = USER_CONFIG.INVIDIOUS_SERVER;
+        }
+    </script>
+    <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
+    <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
+</body>
+
+</html>
