@@ -1597,9 +1597,6 @@
                 <button class="btn btn-primary" id="nextBtn" onclick="nextStep()">
                     下一步 ➡️
                 </button>
-                <button class="btn btn-success" id="skipBtn" onclick="nextStep()" style="display: none;">
-                    跳過此步驟 ⏭️
-                </button>
             </div>
         </div>
     </div>
@@ -1729,6 +1726,12 @@
         let drawMode = 'manual';
 
         function checkEnvironmentAndApi() {
+            // 強制同步輸入框到 USER_CONFIG，避免 onchange 未觸發
+            const envKey = document.getElementById('envYoutubeApiKey')?.value;
+            const envClient = document.getElementById('envMemberClientId')?.value;
+            if (envKey) USER_CONFIG.YOUTUBE_API_KEY = envKey.trim();
+            if (envClient) USER_CONFIG.CLIENT_ID = envClient.trim();
+
             const isLocal = window.location.protocol === 'file:';
             const modeElement = document.querySelector('input[name="drawMode"]:checked');
             drawMode = modeElement ? modeElement.value : 'manual';
@@ -1776,11 +1779,8 @@
                 }
                 if (alertMsg) alertMsg.innerHTML = msgs.join('<br>');
 
-                let tempKey = document.getElementById('envYoutubeApiKey')?.value;
-                let tempClient = document.getElementById('envMemberClientId')?.value;
-                if ((missingYtKey && !tempKey) || (missingClient && !tempClient)) {
-                    if (step1Hint) step1Hint.style.display = 'block';
-                }
+                // 註：金鑰缺失時僅顯示警告與欄位，不再強硬阻擋「下一步」，因為使用者可能有手動 CSV 備案。
+                // 若有其他硬性阻擋需求可於此處再行判斷。
             }
 
             updateStep3UI();
@@ -1960,16 +1960,9 @@
 
             if (currentStep === totalSteps) {
                 nextBtn.style.display = 'none';
-                skipBtn.style.display = 'none';
-            } else if (currentStep === 4 || currentStep === 6) {
-                // 步驟 4（限制收集）和步驟 6（加權設定）為選填
-                nextBtn.style.display = 'inline-block';
-                nextBtn.textContent = '下一步 ➡️';
-                skipBtn.style.display = 'inline-block';
             } else {
                 nextBtn.style.display = 'inline-block';
                 nextBtn.textContent = '下一步 ➡️';
-                skipBtn.style.display = 'none';
             }
 
             // 更新確認頁面摘要
@@ -2824,6 +2817,8 @@
         function showLoadingAnimation() {
             const loadingOverlay = document.getElementById('loadingOverlay');
             const countdownEl = document.getElementById('countdown');
+            const loadingText = loadingOverlay.querySelector('.loading-text');
+            if (loadingText) loadingText.innerText = '正在抽獎中...';
 
             loadingOverlay.classList.add('active');
 
@@ -4743,6 +4738,8 @@
             if (btn) btn.disabled = true;
 
             const loadingOverlay = document.getElementById('loadingOverlay');
+            const loadingText = loadingOverlay.querySelector('.loading-text');
+            if (loadingText) loadingText.innerText = '正在轉換中...';
             loadingOverlay.classList.add('active');
             const countdownEl = document.getElementById('countdown');
 
