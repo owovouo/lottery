@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我都OK啊-進階抽獎程式 v8 (精靈模式)</title>
+    <title>我都OK啊-進階抽獎程式</title>
     <!-- ========================================================= -->
     <!-- ⬇⬇⬇ 請在此輸入您的 YOUTUBE DATA API KEY ⬇⬇⬇ -->
     <!-- ========================================================= -->
@@ -38,6 +38,7 @@
             --bg-base: #F5F5F7;
             --bg-highlight: #FFFFFF;
             --fg-base: #555555;
+            --fg-dim: #999999;
             --fg-emphasis: #1D1D1F;
             --primary: #5A5A60;
             /* 質感銀灰的重點色 */
@@ -69,6 +70,7 @@
             --bg-base: #121212;
             --bg-highlight: #1E1E1E;
             --fg-base: #A0A0A0;
+            --fg-dim: #606060;
             --fg-emphasis: #FFFFFF;
             --primary: #0ABAB5;
             /* Tiffany 綠主色 */
@@ -743,11 +745,16 @@
 
         .winner-tag {
             background: rgba(255, 255, 255, 0.9);
-            color: var(--fg-emphasis);
+            color: #1D1D1F;
             padding: 8px 16px;
             border-radius: 20px;
             font-weight: 500;
             font-size: 1rem;
+        }
+
+        [data-theme="dark"] .winner-tag {
+            background: rgba(255, 255, 255, 0.18);
+            color: #FFFFFF;
         }
 
         /* 載入動畫 */
@@ -1064,8 +1071,8 @@
             <button class="theme-toggle" onclick="toggleSettingsPanel()" id="settingsToggle"
                 style="left: 20px; right: auto; top: 42px;" title="進階設定">⚙️</button>
             <button class="theme-toggle" onclick="toggleTheme()" id="themeToggle" title="切換配色方案">☀️</button>
-            <h1>🎉 "我都OK啊" 頻道抽獎程式 v8</h1>
-            <p>簡單、公正、快速的抽獎工具</p>
+            <h1 id="headerTitle">🎉 "我都OK啊" 頻道抽獎</h1>
+            <p id="headerSubtitle">簡單、公正、快速的抽獎工具</p>
         </div>
 
         <!-- 進階設定面板（預設隱藏） -->
@@ -1077,6 +1084,25 @@
             <input type="checkbox" id="requireComment" style="display:none;">
             <!-- 以下供 checkEnvironmentAndApi() 向後相容，不顯示 -->
             <div id="envAlertBox" style="display:none;"><p id="envAlertMsg"></p><div id="envApiInputGroup"></div></div>
+
+            <!-- 標題與副標題即時編輯 -->
+            <div style="margin-bottom: 20px; padding-bottom: 18px; border-bottom: 1px solid var(--glass-border);">
+                <div style="font-size: 0.9rem; font-weight: 600; color: var(--fg-emphasis); margin-bottom: 10px;">📝 頁面標題</div>
+                <div class="form-group" style="margin-bottom: 10px;">
+                    <label class="form-label" style="font-size: 0.85rem;">主標題</label>
+                    <input type="text" id="settingsTitleInput" class="form-input"
+                        value='🎉 "我都OK啊" 頻道抽獎程式 v8'
+                        oninput="document.getElementById('headerTitle').textContent = this.value"
+                        style="font-size: 0.95rem;">
+                </div>
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label class="form-label" style="font-size: 0.85rem;">副標題</label>
+                    <input type="text" id="settingsSubtitleInput" class="form-input"
+                        value="簡單、公正、快速的抽獎工具"
+                        oninput="document.getElementById('headerSubtitle').textContent = this.value"
+                        style="font-size: 0.95rem;">
+                </div>
+            </div>
 
             <!-- 直播隱私模式（永遠顯示） -->
             <div style="margin-bottom: 20px;">
@@ -1345,10 +1371,15 @@
                         <!-- 最低月數 -->
                         <div class="form-group" style="margin-bottom:20px;">
                             <label class="form-label">最低會員加入時長</label>
-                            <div style="display:flex; align-items:center; gap:10px;">
+                            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
                                 <input type="number" id="memberMinMonths" class="form-input" min="0" value="0"
-                                    style="width:100px;" placeholder="0">
+                                    style="width:100px;" placeholder="0"
+                                    oninput="onMemberMinMonthsChange()">
                                 <span style="color:var(--fg-base);">個月（填 0 = 不限時長）</span>
+                                <button id="btnReapplyMonths" class="btn btn-primary" onclick="reapplyMonthFilter()"
+                                    style="display:none; font-size:0.9rem; padding:8px 16px;">
+                                    🔄 套用新月份條件
+                                </button>
                             </div>
                         </div>
 
@@ -2030,17 +2061,50 @@
                 }
             }
             memberList._minMonths = minMonths;
+            memberList._source = 'csv';
             let qualifiedCount = 0;
             memberList.forEach(m => { if (m.months >= minMonths) qualifiedCount++; });
 
             const skippedNote = skippedNoUrl > 0
                 ? `<br><span style="color:var(--orange);">⚠️ 有 ${skippedNoUrl} 筆無 URL 的資料已略過</span>` : '';
+            memberList._statsFirstLine = `共匯入 <strong>${memberList.size}</strong> 位會員（不重複）${skippedNote}`;
 
             document.getElementById('memberCsvManualMapping').style.display = 'none';
             document.getElementById('memberImportResult').style.display = 'block';
             document.getElementById('memberImportStats').innerHTML =
-                `共匯入 <strong>${memberList.size}</strong> 位會員（不重複）${skippedNote}<br>` +
-                `符合 ${minMonths} 個月以上條件：<strong>${qualifiedCount}</strong> 位`;
+                memberList._statsFirstLine + `<br>符合 ${minMonths} 個月以上條件：<strong>${qualifiedCount}</strong> 位`;
+            const btnReapply = document.getElementById('btnReapplyMonths');
+            if (btnReapply) btnReapply.style.display = 'none';
+        }
+
+        // 月數輸入框變動時，若已有資料則顯示「重新套用」按鈕
+        function onMemberMinMonthsChange() {
+            const btn = document.getElementById('btnReapplyMonths');
+            if (btn) btn.style.display = memberList.size > 0 ? 'inline-block' : 'none';
+        }
+
+        // 重新以目前月數設定計算符合條件人數並更新顯示（不需重新讀檔或重新抓取）
+        function reapplyMonthFilter() {
+            const minMonths = parseInt(document.getElementById('memberMinMonths').value) || 0;
+            memberList._minMonths = minMonths;
+
+            let qualifiedCount = 0;
+            memberList.forEach(m => { if (m.months >= minMonths) qualifiedCount++; });
+
+            const qualifiedLine = `<br>符合 ${minMonths} 個月以上條件：<strong>${qualifiedCount}</strong> 位`;
+
+            if (memberList._source === 'csv') {
+                const statsEl = document.getElementById('memberImportStats');
+                if (statsEl) statsEl.innerHTML = (memberList._statsFirstLine || '') + qualifiedLine;
+            } else if (memberList._source === 'oauth') {
+                const statusEl = document.getElementById('api_status');
+                if (statusEl) statusEl.innerHTML = (memberList._statsFirstLine || '') + qualifiedLine;
+            }
+
+            const btn = document.getElementById('btnReapplyMonths');
+            if (btn) btn.style.display = 'none';
+
+            updateQualificationSummary();
         }
 
         function showMemberCsvManualMapping(headers) {
@@ -4160,12 +4224,18 @@
                 } while (pageToken);
 
                 // 抓取完後更新符合條件的數量，與 CSV 匯入時同步邏輯
+                memberList._source = 'oauth';
+                memberList._minMonths = minMonths;
+                memberList._statsFirstLine = `✅ 同步完成！<br>共抓取 <strong>${memberList.size}</strong> 位付費會員`;
                 let qualifiedCount = 0;
                 memberList.forEach(m => {
                     if (m.months >= minMonths) qualifiedCount++;
                 });
 
-                document.getElementById('api_status').innerHTML = `✅ 同步完成！<br>共抓取 <strong>${memberList.size}</strong> 位付費會員<br>符合 ${minMonths} 個月以上條件：<strong>${qualifiedCount}</strong> 位`;
+                document.getElementById('api_status').innerHTML =
+                    memberList._statsFirstLine + `<br>符合 ${minMonths} 個月以上條件：<strong>${qualifiedCount}</strong> 位`;
+                const btnReapply = document.getElementById('btnReapplyMonths');
+                if (btnReapply) btnReapply.style.display = 'none';
                 updateQualificationSummary();
 
             } catch (err) {
